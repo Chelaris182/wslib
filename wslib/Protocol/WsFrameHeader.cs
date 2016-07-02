@@ -15,6 +15,16 @@ namespace wslib.Protocol
             get { return byte1.HasFlag(6); }
         }
 
+        public bool RSV2
+        {
+            get { return byte1.HasFlag(5); }
+        }
+
+        public bool RSV3
+        {
+            get { return byte1.HasFlag(4); }
+        }
+
         public enum Opcodes
         {
             CONTINUATION = 0,

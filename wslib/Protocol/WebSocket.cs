@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Threading;
@@ -28,18 +29,25 @@ namespace wslib.Protocol
 
         public async Task<WsMessage> ReadMessageAsync(CancellationToken cancellationToken)
         {
-            while (IsConnected())
+            try
             {
-                var frame = await WsDissector.ReadFrameHeader(stream).ConfigureAwait(false); // TODO: close connection gracefully
-                if (!isDataFrame(frame))
+                while (IsConnected())
                 {
-                    await processControlFrame(frame).ConfigureAwait(false);
-                    continue;
-                }
+                    var frame = await WsDissector.ReadFrameHeader(stream).ConfigureAwait(false); // TODO: close connection gracefully
+                    if (!isDataFrame(frame))
+                    {
+                        await processControlFrame(frame).ConfigureAwait(false);
+                        continue;
+                    }
 
-                var messageType = frame.Header.OPCODE == WsFrameHeader.Opcodes.TEXT ? MessageType.Text : MessageType.Binary;
-                var messagePayload = new WsReadStream(frame, stream, false);
-                return new WsMessage(messageType, messagePayload);
+                    var messageType = frame.Header.OPCODE == WsFrameHeader.Opcodes.TEXT ? MessageType.Text : MessageType.Binary;
+                    var messagePayload = new WsReadStream(frame, stream, false);
+                    return new WsMessage(messageType, messagePayload);
+                }
+            }
+            catch (InvalidOperationException e) // happens when read or write happens on a closed socket
+            {
+                // TODO: log?
             }
 
             return null;
@@ -48,14 +56,14 @@ namespace wslib.Protocol
         public async Task<WsMessageWriter> CreateWriter(MessageType type, CancellationToken cancellationToken)
         {
             await writeSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-            return new WsMessageWriter(type, () => writeSemaphore.Release(), stream); // TODO replase action with disposable object
+            return new WsMessageWriter(type, () => writeSemaphore.Release(), stream); // TODO replace action with disposable object
         }
 
         private async Task processControlFrame(WsFrame frame)
         {
             if (frame.PayloadLength > 1024)
             {
-                closeConnection(CloseStatusCode.MessageTooLarge);
+                await closeConnection(CloseStatusCode.MessageTooLarge).ConfigureAwait(false);
                 return;
             }
 
@@ -65,12 +73,14 @@ namespace wslib.Protocol
             switch (frame.Header.OPCODE)
             {
                 case WsFrameHeader.Opcodes.CLOSE:
-                    int code = (int)StreamExtensions.ReadN(payload, 0, 2); // client clode status code
-                    closeConnection((CloseStatusCode)code);
+                    if (payload.Length >= 2)
+                        await closeConnection(payload[0], payload[1]).ConfigureAwait(false);
+                    else
+                        await closeConnection(CloseStatusCode.NormalClosure).ConfigureAwait(false);
                     return;
 
                 case WsFrameHeader.Opcodes.PING:
-                    pongReply(frame); // fire&forget
+                    pongReply(frame, payload); // fire&forget
                     break;
 
                 default:
@@ -78,12 +88,41 @@ namespace wslib.Protocol
             }
         }
 
-        private void closeConnection(CloseStatusCode closeCode)
+        private Task closeConnection(CloseStatusCode statusCode)
         {
+            var s = (short)statusCode;
+            return closeConnection((byte)(s >> 8), (byte)(s & 0xff));
         }
 
-        private async Task pongReply(WsFrame frame)
+        private async Task closeConnection(byte code1, byte code2)
         {
+            await writeSemaphore.WaitAsync(CancellationToken.None).ConfigureAwait(false); // TODO: cancellation token / timeout
+            try
+            {
+                var header = WsDissector.CreateFrameHeader(true, WsFrameHeader.Opcodes.CLOSE, 2);
+                await stream.WriteAsync(header.Array, header.Offset, header.Count).ConfigureAwait(false);
+                await stream.WriteAsync(new[] { code1, code2 }, 0, 2).ConfigureAwait(false);
+                stream.Close();
+            }
+            finally
+            {
+                writeSemaphore.Release(); // TODO: replace with disposable object
+            }
+        }
+
+        private async Task pongReply(WsFrame frame, byte[] payload)
+        {
+            await writeSemaphore.WaitAsync(CancellationToken.None).ConfigureAwait(false); // TODO: cancellation token / timeout
+            try
+            {
+                var header = WsDissector.CreateFrameHeader(true, WsFrameHeader.Opcodes.PONG, 2);
+                await stream.WriteAsync(header.Array, header.Offset, header.Count).ConfigureAwait(false);
+                await stream.WriteAsync(payload, 0, payload.Length).ConfigureAwait(false);
+            }
+            finally
+            {
+                writeSemaphore.Release(); // TODO: replace with disposable object
+            }
         }
 
         private static bool isDataFrame(WsFrame frame)

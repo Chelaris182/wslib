@@ -50,10 +50,6 @@
       <HintPath>..\packages\NUnit.3.4.1\lib\net45\nunit.framework.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="Ploeh.AutoFixture, Version=3.48.0.0, Culture=neutral, PublicKeyToken=b24654c590009d4f, processorArchitecture=MSIL">
-      <HintPath>..\packages\AutoFixture.3.48.0\lib\net40\Ploeh.AutoFixture.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
     <Reference Include="System" />
   </ItemGroup>
   <Choose>
@@ -65,7 +61,8 @@
     <Otherwise />
   </Choose>
   <ItemGroup>
-    <Compile Include="FrameParserTest.cs" />
+    <Compile Include="FrameDissectorTests.cs" />
+    <Compile Include="FrameHeaderTest.cs" />
     <Compile Include="NegotiationTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

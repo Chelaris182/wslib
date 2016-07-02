@@ -1,6 +1,4 @@
-﻿using wslib.Protocol;
-
-namespace wslib
+﻿namespace wslib.Protocol
 {
     public class WsFrame
     {

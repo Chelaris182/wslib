@@ -9,6 +9,8 @@ namespace UnitTests
 {
     public class NegotiationTests
     {
+        // TODO: add a test for negotiation timeout
+
         [Test]
         public async Task NoUpgradeHeader()
         {

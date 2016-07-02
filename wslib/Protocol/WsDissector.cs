@@ -5,12 +5,12 @@ using System.Threading.Tasks;
 
 namespace wslib.Protocol
 {
-    class WsDissector
+    public static class WsDissector
     {
         public static async Task<WsFrame> ReadFrameHeader(Stream stream)
         {
             var buf = new byte[14];
-            var headerLength = 6;
+            var headerLength = 6; // all frames sent from the client to the server are masked
             await stream.ReadUntil(buf, 0, headerLength).ConfigureAwait(false);
 
             bool masked = (buf[1] > 127);
