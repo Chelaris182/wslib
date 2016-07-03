@@ -10,7 +10,7 @@ namespace wslib.Protocol
     {
         private WsFrame currentFrame;
         private ulong framePayloadLen;
-        private ulong position;
+        private ulong framePosition;
 
         public WsReadStream(WsFrame frame, Stream innerStream, bool closeInnerStream) : base(innerStream, closeInnerStream)
         {
@@ -29,12 +29,13 @@ namespace wslib.Protocol
             unmask(buffer, offset, r);
 
             framePayloadLen -= (ulong)r;
-            position += (ulong)r;
+            framePosition += (ulong)r;
             if (framePayloadLen == 0 && !currentFrame.Header.FIN)
             {
                 currentFrame = await WsDissector.ReadFrameHeader(InnerStream).ConfigureAwait(false); // TODO: close connection gracefully
                 if (currentFrame.Header.OPCODE != WsFrameHeader.Opcodes.CONTINUATION) throw new ProtocolViolationException();
                 framePayloadLen = currentFrame.PayloadLength;
+                framePosition = 0;
             }
 
             return r;
@@ -44,8 +45,8 @@ namespace wslib.Protocol
         {
             for (var i = offset; i < offset + count; i++)
             {
-                buffer[i] = (byte)(buffer[i] ^ currentFrame.Mask[position % 4]);
-                position++;
+                buffer[i] = (byte)(buffer[i] ^ currentFrame.Mask[framePosition % 4]);
+                framePosition++;
             }
         }
 
