@@ -34,12 +34,12 @@ namespace wslib.Protocol
             return base.WriteAsync(header.Array, header.Offset, header.Count, cancellationToken);
         }
 
-        public Task CloseAsync(CancellationToken cancellationToken)
+        public Task CloseMessageAsync(CancellationToken cancellationToken)
         {
             return writeFrameHeader(true, 0, cancellationToken);
         }
 
-        public async Task WriteFinalAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        public async Task WriteMessageAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
             await writeFrameHeader(true, count, cancellationToken).ConfigureAwait(false);
             await base.WriteAsync(buffer, offset, count, cancellationToken).ConfigureAwait(false);

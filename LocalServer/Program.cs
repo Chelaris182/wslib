@@ -43,7 +43,7 @@ namespace LocalServer
 
                             using (var w = await webSocket.CreateWriter(MessageType.Text, CancellationToken.None))
                             {
-                                await w.WriteFinalAsync(ms.ToArray(), 0, (int)ms.Length, CancellationToken.None);
+                                await w.WriteMessageAsync(ms.ToArray(), 0, (int)ms.Length, CancellationToken.None);
                             }
                         }
                     }

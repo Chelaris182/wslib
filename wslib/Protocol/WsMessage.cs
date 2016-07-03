@@ -11,7 +11,7 @@ namespace wslib.Protocol
     public class WsMessage : IDisposable
     {
         public readonly MessageType Type;
-        public readonly WsReadStream ReadStream;
+        public readonly WsReadStream ReadStream; // TODO: expose payload length
 
         public WsMessage(MessageType type, WsReadStream stream)
         {

@@ -64,8 +64,8 @@ namespace UnitTests
             {
                 for (int i = 0; i < payload1.Length; i++)
                     ms.WriteByte((byte)(payload1[i] ^ mask1[i % 4]));
-                ms.WriteByte(0x80); // second header
-                ms.WriteByte((byte)(0x80 | payload2.Length));
+                ms.WriteByte(0x80); // second header (FIN FLAG | CONTINUATION)
+                ms.WriteByte((byte)(0x80 | payload2.Length)); // (MASK | length)
                 ms.Write(mask2, 0, mask2.Length);
                 for (int i = 0; i < payload2.Length; i++)
                     ms.WriteByte((byte)(payload2[i] ^ mask2[i % 4]));

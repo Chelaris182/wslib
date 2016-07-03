@@ -25,5 +25,12 @@ namespace wslib.Protocol
             }
             return n;
         }
+
+        public static async Task<byte[]> ReadPayload(this WsMessage message)
+        {
+            var destination = new MemoryStream();
+            await message.ReadStream.CopyToAsync(destination).ConfigureAwait(false);
+            return destination.ToArray();
+        }
     }
 }

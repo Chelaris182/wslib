@@ -13,12 +13,14 @@ namespace wslib.Protocol
 
         private Dictionary<string, object> env;
         private readonly Stream stream;
+        private readonly bool server;
         private readonly SemaphoreSlim writeSemaphore = new SemaphoreSlim(1, 1);
 
-        public WebSocket(Dictionary<string, object> env, Stream stream)
+        public WebSocket(Dictionary<string, object> env, Stream stream, bool server = true)
         {
             this.env = env;
             this.stream = stream;
+            this.server = server;
         }
 
         public void Dispose()
@@ -33,7 +35,7 @@ namespace wslib.Protocol
             {
                 while (IsConnected())
                 {
-                    var frame = await WsDissector.ReadFrameHeader(stream).ConfigureAwait(false); // TODO: close connection gracefully
+                    var frame = await WsDissector.ReadFrameHeader(stream, server).ConfigureAwait(false); // TODO: close connection gracefully
                     if (!isDataFrame(frame))
                     {
                         await processControlFrame(frame).ConfigureAwait(false);
@@ -44,6 +46,14 @@ namespace wslib.Protocol
                     var messagePayload = new WsReadStream(frame, stream, false);
                     return new WsMessage(messageType, messagePayload);
                 }
+            }
+            catch (IOException e) // happens when read or write returns error
+            {
+                stream.Close();
+            }
+            catch (ProtocolViolationException e)
+            {
+                await closeConnection(CloseStatusCode.ProtocolError).ConfigureAwait(false); // TODO: may throw exception?
             }
             catch (InvalidOperationException e) // happens when read or write happens on a closed socket
             {

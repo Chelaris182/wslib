@@ -7,15 +7,15 @@ namespace wslib.Protocol
 {
     public static class WsDissector
     {
-        public static async Task<WsFrame> ReadFrameHeader(Stream stream)
+        public static async Task<WsFrame> ReadFrameHeader(Stream stream, bool expectMask)
         {
             var buf = new byte[14];
-            var headerLength = 6; // all frames sent from the client to the server are masked
+            var headerLength = expectMask ? 6 : 2;
             await stream.ReadUntil(buf, 0, headerLength).ConfigureAwait(false);
 
-            bool masked = (buf[1] > 127);
-            if (!masked) // all frames sent from the client to the server are masked
-                throw new ProtocolViolationException();
+            bool actualMask = (buf[1] > 127);
+            if (expectMask ^ actualMask)
+                throw new ProtocolViolationException("mask flag has wrong value");
 
             int maskOffset = 2;
             ulong payloadLength = (ulong)(buf[1] & 0x7F);
@@ -23,22 +23,24 @@ namespace wslib.Protocol
             {
                 if (payloadLength == 126)
                 {
-                    headerLength += 2;
-                    maskOffset += 2;
-                    await stream.ReadUntil(buf, 6, headerLength).ConfigureAwait(false);
+                    await stream.ReadUntil(buf, headerLength, headerLength + 2).ConfigureAwait(false);
                     payloadLength = StreamExtensions.ReadN(buf, 2, 2);
+                    maskOffset = 4;
                 }
                 else if (payloadLength == 127)
                 {
-                    headerLength += 8;
-                    maskOffset += 8;
-                    await stream.ReadUntil(buf, 6, headerLength).ConfigureAwait(false);
+                    await stream.ReadUntil(buf, headerLength, headerLength + 8).ConfigureAwait(false);
                     payloadLength = StreamExtensions.ReadN(buf, 2, 8);
+                    maskOffset = 10;
                 }
             }
 
-            byte[] mask = new byte[4];
-            Buffer.BlockCopy(buf, maskOffset, mask, 0, 4);
+            byte[] mask = null; // TODO: replace with array segment
+            if (actualMask)
+            {
+                mask = new byte[4];
+                Buffer.BlockCopy(buf, maskOffset, mask, 0, 4);
+            }
 
             var header = new WsFrameHeader(buf[0], buf[1]);
             var frame = new WsFrame(header, payloadLength, mask);

@@ -26,13 +26,14 @@ namespace wslib.Protocol
             var r = await base.ReadAsync(buffer, offset, toRead, cancellationToken).ConfigureAwait(false);
             if (r <= 0) return r;
 
-            unmask(buffer, offset, r);
+            if (currentFrame.Header.MASK)
+                unmask(buffer, offset, r);
 
             framePayloadLen -= (ulong)r;
             framePosition += (ulong)r;
             if (framePayloadLen == 0 && !currentFrame.Header.FIN)
             {
-                currentFrame = await WsDissector.ReadFrameHeader(InnerStream).ConfigureAwait(false); // TODO: close connection gracefully
+                currentFrame = await WsDissector.ReadFrameHeader(InnerStream, currentFrame.Header.MASK).ConfigureAwait(false); // TODO: close connection gracefully
                 if (currentFrame.Header.OPCODE != WsFrameHeader.Opcodes.CONTINUATION) throw new ProtocolViolationException();
                 framePayloadLen = currentFrame.PayloadLength;
                 framePosition = 0;

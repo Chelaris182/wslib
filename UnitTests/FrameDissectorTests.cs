@@ -17,7 +17,7 @@ namespace UnitTests
             var stream = new MemoryStream();
             stream.Write(message, 0, message.Length);
             stream.Position = 0;
-            var frame = await WsDissector.ReadFrameHeader(stream);
+            var frame = await WsDissector.ReadFrameHeader(stream, true);
             Assert.That(frame.Header.FIN, Is.True);
             Assert.That(frame.PayloadLength, Is.EqualTo(length));
         }
@@ -29,7 +29,7 @@ namespace UnitTests
             var stream = new MemoryStream();
             stream.Write(message, 0, message.Length);
             stream.Position = 0;
-            Assert.ThrowsAsync<IOException>(() => WsDissector.ReadFrameHeader(stream));
+            Assert.ThrowsAsync<IOException>(() => WsDissector.ReadFrameHeader(stream, true));
         }
     }
 }
