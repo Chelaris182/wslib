@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Net.Security;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
@@ -46,30 +47,33 @@ namespace wslib
                 }
 
                 Interlocked.Increment(ref currentOutstandingRequests);
-                var stream = new NetworkStream(socket, FileAccess.ReadWrite, true);
+                Stream stream = new NetworkStream(socket, FileAccess.ReadWrite, true);
                 try
                 {
                     offloadStartNextRequest();
+
+                    if (options.UseSSL)
+                    {
+                        var ssl = new SslStream(stream);
+                        stream = ssl;
+                        await ssl.AuthenticateAsServerAsync(options.certificate).ConfigureAwait(false);
+                    }
+
                     await processRequestAsync(stream).ConfigureAwait(false);
                 }
                 finally
                 {
-                    stream.Dispose();
                     Interlocked.Decrement(ref currentOutstandingRequests);
+                    stream.Dispose();
                 }
             }
         }
 
         private async Task processRequestAsync(Stream stream)
         {
-            IWebSocket ws = await negotiator.Negotiate(stream).ConfigureAwait(false);
-            try
+            using (IWebSocket ws = await negotiator.Negotiate(stream).ConfigureAwait(false))
             {
                 await appFunc(ws).ConfigureAwait(false);
-            }
-            finally
-            {
-                ws.Dispose();
             }
         }
 
