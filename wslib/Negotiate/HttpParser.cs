@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
-using wslib.Models;
 
 namespace wslib.Negotiate
 {
@@ -32,7 +31,7 @@ namespace wslib.Negotiate
         {
             var tokens = line.Split(new[] { ':' }, 2, StringSplitOptions.RemoveEmptyEntries);
             if (tokens.Length != 2) throw new HandshakeException("Invalid header");
-            httpRequest.Headers[tokens[0].TrimEnd()] = tokens[1].TrimStart();
+            httpRequest.Headers[tokens[0].TrimEnd()] = tokens[1].TrimStart(); // TODO: multiple line headers
         }
 
         private void parseRequestLine(string requestLine, HttpRequest httpRequest)

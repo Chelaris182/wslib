@@ -2,8 +2,8 @@
 using System.Threading.Tasks;
 using Moq;
 using NUnit.Framework;
-using wslib.Models;
 using wslib.Negotiate;
+using wslib.Protocol;
 
 namespace UnitTests
 {
@@ -18,7 +18,7 @@ namespace UnitTests
             parser.Setup(httpParser => httpParser.ParseHttpRequest(Stream.Null)).ReturnsAsync(new HttpRequest());
 
             var composer = new Mock<IHttpComposer>();
-            var wsHandshake = new WsHandshake(null, parser.Object, composer.Object);
+            var wsHandshake = new WsHandshake(parser.Object, composer.Object, new IServerExtension[] { }, null);
             await wsHandshake.Performhandshake(Stream.Null); // must return some HTTP code
         }
 
@@ -40,7 +40,7 @@ namespace UnitTests
                 .Returns(() => Task.FromResult(true))
                 .Callback<HttpResponse, Stream>((response, _) => { spyedResponse = response; });
 
-            var wsHandshake = new WsHandshake(null, parser.Object, composer.Object);
+            var wsHandshake = new WsHandshake(parser.Object, composer.Object, new IServerExtension[] { }, null);
             var handShakeResult = await wsHandshake.Performhandshake(Stream.Null);
 
             composer.Verify(httpComposer => httpComposer.WriteResponse(It.IsAny<HttpResponse>(), Stream.Null));

@@ -5,7 +5,8 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
-using wslib.Models;
+using wslib.Negotiate.Extensions;
+using wslib.Protocol;
 
 namespace wslib.Negotiate
 {
@@ -14,31 +15,74 @@ namespace wslib.Negotiate
         private readonly Func<HttpRequest, HttpResponse, Dictionary<string, object>, Task> negotiationHook;
         private readonly IHttpParser httpParser;
         private readonly IHttpComposer httpComposer;
+        private readonly IEnumerable<IServerExtension> serverExtensions;
 
-        public WsHandshake(Func<HttpRequest, HttpResponse, Dictionary<string, object>, Task> negotiationHook) :
-            this(negotiationHook, new HttpParser(), new HttpComposer())
-        {
-        }
-
-        public WsHandshake(Func<HttpRequest, HttpResponse, Dictionary<string, object>, Task> negotiationHook, IHttpParser httpParser, IHttpComposer httpComposer)
+        public WsHandshake(IHttpParser httpParser,
+                           IHttpComposer httpComposer,
+                           IEnumerable<IServerExtension> extensions,
+                           Func<HttpRequest, HttpResponse, Dictionary<string, object>, Task> negotiationHook)
         {
             this.negotiationHook = negotiationHook;
             this.httpParser = httpParser;
             this.httpComposer = httpComposer;
+            this.serverExtensions = extensions;
         }
 
         public async Task<HandshakeResult> Performhandshake(Stream stream)
         {
-            HttpRequest httpRequest = await httpParser.ParseHttpRequest(stream).ConfigureAwait(false);
-            validateRequest(httpRequest);
-            HttpResponse httpResponse = new HttpResponse();
-            var env = new Dictionary<string, object>();
-            // TODO: modify stream with extensions here
-            if (negotiationHook != null)
-                await negotiationHook(httpRequest, httpResponse, env).ConfigureAwait(false);
-            negotiate(httpRequest, httpResponse);
-            await httpComposer.WriteResponse(httpResponse, stream).ConfigureAwait(false);
-            return new HandshakeResult(env, stream);
+            try
+            {
+                HttpRequest httpRequest = await httpParser.ParseHttpRequest(stream).ConfigureAwait(false);
+                validateRequest(httpRequest);
+                HttpResponse httpResponse = new HttpResponse();
+                List<IMessageExtension> extensions = negotiateExtensions(httpRequest, httpResponse);
+                var env = new Dictionary<string, object>();
+                if (negotiationHook != null)
+                    await negotiationHook(httpRequest, httpResponse, env).ConfigureAwait(false);
+                negotiate(httpRequest, httpResponse);
+                await httpComposer.WriteResponse(httpResponse, stream).ConfigureAwait(false);
+                return new HandshakeResult(env, extensions, stream);
+            }
+            catch (HandshakeException)
+            {
+                HttpResponse httpResponse = new HttpResponse { Status = HttpStatusCode.BadRequest }; // TODO: send body? add a test
+                await httpComposer.WriteResponse(httpResponse, stream).ConfigureAwait(false);
+                throw;
+            }
+        }
+
+        private List<IMessageExtension> negotiateExtensions(HttpRequest httpRequest, HttpResponse httpResponse)
+        {
+            string value;
+            if (httpRequest.Headers.TryGetValue("Sec-WebSocket-Extensions", out value))
+            {
+                IEnumerable<ExtensionRequest> clientExtensions = NegotiateExtensions.ParseExtensionHeader(value);
+
+                var matchedExtensions = new List<ExtensionRequest>();
+                var messageExtensions = new List<IMessageExtension>();
+                foreach (var clientE in clientExtensions)
+                {
+                    foreach (var serverE in serverExtensions)
+                    {
+                        ExtensionParams matchedParams;
+                        IMessageExtension messageExtension;
+                        if (serverE.TryMatch(clientE.Token, clientE.Params, out matchedParams, out messageExtension))
+                        {
+                            matchedExtensions.Add(new ExtensionRequest(clientE.Token, matchedParams));
+                            messageExtensions.Add(messageExtension);
+                            break;
+                        }
+                    }
+                }
+
+                if (messageExtensions.Count == 0) return messageExtensions;
+
+                string header = NegotiateExtensions.ComposeExtensionHeader(matchedExtensions);
+                httpResponse.Headers["Sec-WebSocket-Extensions"] = header;
+                return messageExtensions;
+            }
+
+            return null;
         }
 
         private void negotiate(HttpRequest httpRequest, HttpResponse httpResponse)

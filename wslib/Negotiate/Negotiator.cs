@@ -1,7 +1,7 @@
 ﻿using System.IO;
 using System.Net.WebSockets;
 using System.Threading.Tasks;
-using wslib.Protocol;
+using wslib.DeflateExtension;
 using WebSocket = wslib.Protocol.WebSocket;
 
 namespace wslib.Negotiate
@@ -14,7 +14,8 @@ namespace wslib.Negotiate
         public Negotiator(NegotiateOptions options)
         {
             this.options = options;
-            handshaker = new WsHandshake(this.options.HttpHook);
+            var deflateExtension = new DeflateExtension.DeflateExtension();
+            handshaker = new WsHandshake(new HttpParser(), new HttpComposer(), new[] { deflateExtension }, options.HttpHook);
         }
 
         public async Task<WebSocket> Negotiate(Stream clientStream)
@@ -26,7 +27,7 @@ namespace wslib.Negotiate
                 throw new WebSocketException("Negotiation timeout");
 
             var handshake = await handshakeTask.ConfigureAwait(false);
-            return new WebSocket(handshake.Env, handshake.Stream);
+            return new WebSocket(handshake.Env, handshake.Stream, handshake.Extensions, true);
         }
     }
 }

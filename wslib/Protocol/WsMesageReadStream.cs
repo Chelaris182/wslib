@@ -3,16 +3,17 @@ using System.IO;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using wslib.Utils;
 
 namespace wslib.Protocol
 {
-    public class WsReadStream : StreamWrapper
+    public class WsMesageReadStream : StreamWrapper
     {
         private WsFrame currentFrame;
         private ulong framePayloadLen;
         private ulong framePosition;
 
-        public WsReadStream(WsFrame frame, Stream innerStream, bool closeInnerStream) : base(innerStream, closeInnerStream)
+        public WsMesageReadStream(WsFrame frame, Stream innerStream, bool closeInnerStream) : base(innerStream, closeInnerStream)
         {
             currentFrame = frame;
             framePayloadLen = frame.PayloadLength;

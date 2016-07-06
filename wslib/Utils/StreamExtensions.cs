@@ -1,7 +1,8 @@
 ﻿using System.IO;
 using System.Threading.Tasks;
+using wslib.Protocol;
 
-namespace wslib.Protocol
+namespace wslib.Utils
 {
     public static class StreamExtensions
     {

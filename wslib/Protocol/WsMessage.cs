@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 
 namespace wslib.Protocol
 {
@@ -11,9 +12,9 @@ namespace wslib.Protocol
     public class WsMessage : IDisposable
     {
         public readonly MessageType Type;
-        public readonly WsReadStream ReadStream; // TODO: expose payload length
+        public readonly Stream ReadStream;
 
-        public WsMessage(MessageType type, WsReadStream stream)
+        public WsMessage(MessageType type, Stream stream)
         {
             Type = type;
             ReadStream = stream;

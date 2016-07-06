@@ -41,7 +41,10 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Extensions\IConnectionExtension.cs" />
+    <Compile Include="DeflateExtension\DeflateExtension.cs" />
+    <Compile Include="DeflateExtension\WsDeflateWriteStream.cs" />
+    <Compile Include="DeflateExtension\WsSplitStream.cs" />
+    <Compile Include="Negotiate\Extensions\ExtensionList.cs" />
     <Compile Include="Negotiate\HttpRequest.cs" />
     <Compile Include="Negotiate\HandshakeException.cs" />
     <Compile Include="Negotiate\HandshakeResult.cs" />
@@ -50,19 +53,25 @@
     <Compile Include="Negotiate\HttpParser.cs" />
     <Compile Include="Negotiate\IHttpComposer.cs" />
     <Compile Include="Negotiate\IHttpParser.cs" />
+    <Compile Include="Negotiate\Extensions\NegotiateExtensions.cs" />
     <Compile Include="Negotiate\NegotiateOptions.cs" />
     <Compile Include="Negotiate\WsHandshake.cs" />
     <Compile Include="Negotiate\Negotiator.cs" />
     <Compile Include="Protocol\CloseStatusCode.cs" />
+    <Compile Include="DeflateExtension\MessageDeflateExtension.cs" />
+    <Compile Include="Protocol\IServerExtension.cs" />
+    <Compile Include="Protocol\IMessageExtension.cs" />
     <Compile Include="Protocol\Exceptions\WsCloseException.cs" />
-    <Compile Include="Protocol\StreamWrapper.cs" />
+    <Compile Include="Protocol\Writer\IWsMessageWriteStream.cs" />
+    <Compile Include="Utils\StreamWrapper.cs" />
+    <Compile Include="Protocol\Writer\WsWireStream.cs" />
     <Compile Include="Protocol\WsDissector.cs" />
-    <Compile Include="Protocol\StreamExtensions.cs" />
+    <Compile Include="Utils\StreamExtensions.cs" />
     <Compile Include="Protocol\WsFrameHeader.cs" />
     <Compile Include="Protocol\WsMessage.cs" />
-    <Compile Include="Protocol\WsReadStream.cs" />
+    <Compile Include="Protocol\WsMesageReadStream.cs" />
     <Compile Include="Protocol\WebSocket.cs" />
-    <Compile Include="Protocol\WsMessageWriter.cs" />
+    <Compile Include="Protocol\Writer\WsMessageWriter.cs" />
     <Compile Include="Utils\TaskAsyncResult.cs" />
     <Compile Include="IWebSocket.cs" />
     <Compile Include="WebSocketListener.cs" />

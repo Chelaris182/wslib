@@ -2,6 +2,7 @@
 using System.IO;
 using System.Net;
 using System.Threading.Tasks;
+using wslib.Utils;
 
 namespace wslib.Protocol
 {
@@ -47,11 +48,13 @@ namespace wslib.Protocol
             return frame;
         }
 
-        public static ArraySegment<byte> CreateFrameHeader(bool finFlag, WsFrameHeader.Opcodes opcode, int payloadLen)
+        public static ArraySegment<byte> CreateFrameHeader(bool finFlag, bool rsv1, WsFrameHeader.Opcodes opcode, int payloadLen)
         {
             int headerLen = 2;
             byte[] header = new byte[10];
             header[0] = (byte)(finFlag ? 0x80 : 0);
+            if (rsv1)
+                header[0] |= 0x40;
             header[0] |= (byte)opcode;
             if (payloadLen <= 125)
             {

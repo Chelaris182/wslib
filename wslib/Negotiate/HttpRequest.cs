@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace wslib.Models
+namespace wslib.Negotiate
 {
     public class HttpRequest
     {

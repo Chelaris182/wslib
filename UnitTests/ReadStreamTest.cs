@@ -23,7 +23,7 @@ namespace UnitTests
                 ms.Position = 0;
                 var header = new WsFrameHeader(0x80, 0x80);
                 var frame = new WsFrame(header, (ulong)payload.Length, new byte[] { 0, 0, 0, 0 });
-                using (var stream = new WsReadStream(frame, ms, false))
+                using (var stream = new WsMesageReadStream(frame, ms, false))
                 {
                     var destination = new MemoryStream();
                     await stream.CopyToAsync(destination);
@@ -44,7 +44,7 @@ namespace UnitTests
                 ms.Position = 0;
                 var header = new WsFrameHeader(0x80, 0x80);
                 var frame = new WsFrame(header, (ulong)payload.Length, mask);
-                using (var stream = new WsReadStream(frame, ms, false))
+                using (var stream = new WsMesageReadStream(frame, ms, false))
                 {
                     var destination = new MemoryStream();
                     await stream.CopyToAsync(destination);
@@ -73,7 +73,7 @@ namespace UnitTests
                 ms.Position = 0;
                 var header = new WsFrameHeader(0x00, 0x80);
                 var frame = new WsFrame(header, (ulong)payload1.Length, mask1);
-                using (var stream = new WsReadStream(frame, ms, false))
+                using (var stream = new WsMesageReadStream(frame, ms, false))
                 {
                     var destination = new MemoryStream();
                     await stream.CopyToAsync(destination);

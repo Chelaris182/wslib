@@ -1,9 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using wslib.Protocol.Writer;
+using wslib.Utils;
 
 namespace wslib.Protocol
 {
@@ -13,14 +16,16 @@ namespace wslib.Protocol
 
         private Dictionary<string, object> env;
         private readonly Stream stream;
-        private readonly bool server;
+        private readonly List<IMessageExtension> extensions;
+        private readonly bool serverSide;
         private readonly SemaphoreSlim writeSemaphore = new SemaphoreSlim(1, 1);
 
-        public WebSocket(Dictionary<string, object> env, Stream stream, bool server = true)
+        public WebSocket(Dictionary<string, object> env, Stream stream, List<IMessageExtension> extensions, bool serverSide)
         {
             this.env = env;
             this.stream = stream;
-            this.server = server;
+            this.extensions = extensions;
+            this.serverSide = serverSide;
         }
 
         public void Dispose()
@@ -29,13 +34,13 @@ namespace wslib.Protocol
             stream.Dispose();
         }
 
-        public async Task<WsMessage> ReadMessageAsync(CancellationToken cancellationToken)
+        public async Task<WsMessage> ReadMessageAsync(CancellationToken cancellationToken) // TODO: use cancellation token
         {
             try
             {
                 while (IsConnected())
                 {
-                    var frame = await WsDissector.ReadFrameHeader(stream, server).ConfigureAwait(false); // TODO: close connection gracefully
+                    var frame = await WsDissector.ReadFrameHeader(stream, serverSide).ConfigureAwait(false); // TODO: close connection gracefully
                     if (!isDataFrame(frame))
                     {
                         await processControlFrame(frame).ConfigureAwait(false);
@@ -43,13 +48,18 @@ namespace wslib.Protocol
                     }
 
                     var messageType = frame.Header.OPCODE == WsFrameHeader.Opcodes.TEXT ? MessageType.Text : MessageType.Binary;
-                    var messagePayload = new WsReadStream(frame, stream, false);
-                    return new WsMessage(messageType, messagePayload);
+                    Stream payloadStream = new WsMesageReadStream(frame, stream, false);
+                    if (extensions != null)
+                    {
+                        payloadStream = extensions.Aggregate(payloadStream, (current, extension) => extension.ApplyRead(current, frame));
+                    }
+
+                    return new WsMessage(messageType, payloadStream);
                 }
             }
             catch (IOException e) // happens when read or write returns error
             {
-                stream.Close();
+                stream.Close(); // TODO: log
             }
             catch (ProtocolViolationException e)
             {
@@ -63,10 +73,12 @@ namespace wslib.Protocol
             return null;
         }
 
-        public async Task<WsMessageWriter> CreateWriter(MessageType type, CancellationToken cancellationToken)
+        public async Task<WsMessageWriter> CreateMessageWriter(MessageType type, CancellationToken cancellationToken)
         {
             await writeSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-            return new WsMessageWriter(type, () => writeSemaphore.Release(), stream); // TODO replace action with disposable object
+            IWsMessageWriteStream s = new WsWireStream(true, stream);
+            s = extensions.Aggregate(s, (current, extension) => extension.ApplyWrite(current));
+            return new WsMessageWriter(type, () => writeSemaphore.Release(), s); // TODO replace action with disposable object
         }
 
         private async Task processControlFrame(WsFrame frame)
@@ -94,6 +106,7 @@ namespace wslib.Protocol
                     break;
 
                 default:
+                    // TODO: extensions may define additional opcode
                     throw new ProtocolViolationException("Unexpected frame type");
             }
         }
@@ -109,7 +122,7 @@ namespace wslib.Protocol
             await writeSemaphore.WaitAsync(CancellationToken.None).ConfigureAwait(false); // TODO: cancellation token / timeout
             try
             {
-                var header = WsDissector.CreateFrameHeader(true, WsFrameHeader.Opcodes.CLOSE, 2);
+                var header = WsDissector.CreateFrameHeader(true, false, WsFrameHeader.Opcodes.CLOSE, 2);
                 await stream.WriteAsync(header.Array, header.Offset, header.Count).ConfigureAwait(false);
                 await stream.WriteAsync(new[] { code1, code2 }, 0, 2).ConfigureAwait(false);
                 stream.Close();
@@ -125,7 +138,7 @@ namespace wslib.Protocol
             await writeSemaphore.WaitAsync(CancellationToken.None).ConfigureAwait(false); // TODO: cancellation token / timeout
             try
             {
-                var header = WsDissector.CreateFrameHeader(true, WsFrameHeader.Opcodes.PONG, 2);
+                var header = WsDissector.CreateFrameHeader(true, false, WsFrameHeader.Opcodes.PONG, 2);
                 await stream.WriteAsync(header.Array, header.Offset, header.Count).ConfigureAwait(false);
                 await stream.WriteAsync(payload, 0, payload.Length).ConfigureAwait(false);
             }

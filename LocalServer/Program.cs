@@ -41,7 +41,7 @@ namespace LocalServer
                             await msg.ReadStream.CopyToAsync(ms);
                             var text = Encoding.UTF8.GetString(ms.ToArray());
 
-                            using (var w = await webSocket.CreateWriter(MessageType.Text, CancellationToken.None))
+                            using (var w = await webSocket.CreateMessageWriter(MessageType.Text, CancellationToken.None))
                             {
                                 await w.WriteMessageAsync(ms.ToArray(), 0, (int)ms.Length, CancellationToken.None);
                             }
