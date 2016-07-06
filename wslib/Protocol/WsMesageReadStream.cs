@@ -10,12 +10,14 @@ namespace wslib.Protocol
     public class WsMesageReadStream : StreamWrapper
     {
         private WsFrame currentFrame;
+        private readonly Action refreshActivity;
         private ulong framePayloadLen;
         private ulong framePosition;
 
-        public WsMesageReadStream(WsFrame frame, Stream innerStream, bool closeInnerStream) : base(innerStream, closeInnerStream)
+        public WsMesageReadStream(WsFrame frame, Stream innerStream, Action refreshActivity) : base(innerStream, false)
         {
             currentFrame = frame;
+            this.refreshActivity = refreshActivity;
             framePayloadLen = frame.PayloadLength;
         }
 
@@ -26,6 +28,7 @@ namespace wslib.Protocol
 
             var r = await base.ReadAsync(buffer, offset, toRead, cancellationToken).ConfigureAwait(false);
             if (r <= 0) return r;
+            refreshActivity();
 
             if (currentFrame.Header.MASK)
                 unmask(buffer, offset, r);

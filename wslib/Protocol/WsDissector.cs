@@ -49,7 +49,7 @@ namespace wslib.Protocol
             return frame;
         }
 
-        public static ArraySegment<byte> SerializeFrameHeader(WsFrameHeader wsFrameHeader, int payloadLen)
+        public static ArraySegment<byte> SerializeFrameHeader(WsFrameHeader wsFrameHeader, int payloadLen) // TODO: accept segment as in
         {
             int headerLen = 2;
             byte[] header = new byte[10];
