@@ -1,4 +1,5 @@
 ﻿using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using wslib.Protocol;
 
@@ -6,11 +7,11 @@ namespace wslib.Utils
 {
     public static class StreamExtensions
     {
-        public static async Task ReadUntil(this Stream stream, byte[] buffer, int have, int need)
+        public static async Task ReadUntil(this Stream stream, byte[] buffer, int have, int need, CancellationToken cancellationToken)
         {
             while (have < need)
             {
-                var r = await stream.ReadAsync(buffer, have, need - have).ConfigureAwait(false);
+                var r = await stream.ReadAsync(buffer, have, need - have, cancellationToken).ConfigureAwait(false);
                 if (r <= 0) throw new IOException(); // TODO: throw some valid exception
                 have += r;
             }

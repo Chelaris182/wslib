@@ -34,16 +34,16 @@ namespace wslib.Protocol
             stream.Dispose();
         }
 
-        public async Task<WsMessage> ReadMessageAsync(CancellationToken cancellationToken) // TODO: use cancellation token
+        public async Task<WsMessage> ReadMessageAsync(CancellationToken cancellationToken)
         {
             try
             {
                 while (IsConnected())
                 {
-                    var frame = await WsDissector.ReadFrameHeader(stream, serverSocket).ConfigureAwait(false);
+                    var frame = await WsDissector.ReadFrameHeader(stream, serverSocket, cancellationToken).ConfigureAwait(false);
                     if (!isDataFrame(frame))
                     {
-                        await processControlFrame(frame).ConfigureAwait(false);
+                        await processControlFrame(frame, cancellationToken).ConfigureAwait(false);
                         continue;
                     }
 
@@ -63,7 +63,7 @@ namespace wslib.Protocol
             }
             catch (ProtocolViolationException e)
             {
-                await closeConnection(CloseStatusCode.ProtocolError).ConfigureAwait(false); // TODO: may throw exception?
+                await closeConnection(CloseStatusCode.ProtocolError, cancellationToken).ConfigureAwait(false); // TODO: may throw exception?
             }
             catch (InvalidOperationException e) // happens when read or write happens on a closed socket
             {
@@ -81,24 +81,24 @@ namespace wslib.Protocol
             return new WsMessageWriter(type, () => writeSemaphore.Release(), s); // TODO replace action with disposable object
         }
 
-        private async Task processControlFrame(WsFrame frame)
+        private async Task processControlFrame(WsFrame frame, CancellationToken cancellationToken)
         {
             if (frame.PayloadLength > 1024)
             {
-                await closeConnection(CloseStatusCode.MessageTooLarge).ConfigureAwait(false);
+                await closeConnection(CloseStatusCode.MessageTooLarge, cancellationToken).ConfigureAwait(false);
                 return;
             }
 
             byte[] payload = new byte[frame.PayloadLength];
-            await stream.ReadUntil(payload, 0, payload.Length).ConfigureAwait(false);
+            await stream.ReadUntil(payload, 0, payload.Length, cancellationToken).ConfigureAwait(false);
 
             switch (frame.Header.OPCODE)
             {
                 case WsFrameHeader.Opcodes.CLOSE:
                     if (payload.Length >= 2)
-                        await closeConnection(payload[0], payload[1]).ConfigureAwait(false);
+                        await closeConnection(payload[0], payload[1], cancellationToken).ConfigureAwait(false);
                     else
-                        await closeConnection(CloseStatusCode.NormalClosure).ConfigureAwait(false);
+                        await closeConnection(CloseStatusCode.NormalClosure, cancellationToken).ConfigureAwait(false);
                     return;
 
                 case WsFrameHeader.Opcodes.PING:
@@ -111,20 +111,20 @@ namespace wslib.Protocol
             }
         }
 
-        private Task closeConnection(CloseStatusCode statusCode)
+        private Task closeConnection(CloseStatusCode statusCode, CancellationToken cancellationToken)
         {
             var s = (short)statusCode;
-            return closeConnection((byte)(s >> 8), (byte)(s & 0xff));
+            return closeConnection((byte)(s >> 8), (byte)(s & 0xff), cancellationToken);
         }
 
-        private async Task closeConnection(byte code1, byte code2)
+        private async Task closeConnection(byte code1, byte code2, CancellationToken cancellationToken)
         {
-            await writeSemaphore.WaitAsync(CancellationToken.None).ConfigureAwait(false); // TODO: cancellation token / timeout
+            await writeSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false); // TODO: timeout
             try
             {
                 var header = WsDissector.SerializeFrameHeader(new WsFrameHeader(0, 0) { FIN = true, OPCODE = WsFrameHeader.Opcodes.CLOSE }, 2);
-                await stream.WriteAsync(header.Array, header.Offset, header.Count).ConfigureAwait(false);
-                await stream.WriteAsync(new[] { code1, code2 }, 0, 2).ConfigureAwait(false);
+                await stream.WriteAsync(header.Array, header.Offset, header.Count, cancellationToken).ConfigureAwait(false);
+                await stream.WriteAsync(new[] { code1, code2 }, 0, 2, cancellationToken).ConfigureAwait(false);
                 stream.Close();
             }
             finally

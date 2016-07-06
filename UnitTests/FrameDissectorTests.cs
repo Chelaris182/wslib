@@ -1,4 +1,5 @@
 ﻿using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using wslib.Protocol;
@@ -15,7 +16,7 @@ namespace UnitTests
         public async Task TestLengthDecodingMasked(byte[] message, ulong length)
         {
             var stream = new MemoryStream(message);
-            var frame = await WsDissector.ReadFrameHeader(stream, true);
+            var frame = await WsDissector.ReadFrameHeader(stream, true, CancellationToken.None);
             Assert.That(frame.Header.FIN, Is.True);
             Assert.That(frame.Header.MASK, Is.True);
             Assert.That(frame.PayloadLength, Is.EqualTo(length));
@@ -30,7 +31,7 @@ namespace UnitTests
         public async Task TestLengthDecodingWithoutMask(byte[] message, ulong length)
         {
             var stream = new MemoryStream(message);
-            var frame = await WsDissector.ReadFrameHeader(stream, false);
+            var frame = await WsDissector.ReadFrameHeader(stream, false, CancellationToken.None);
             Assert.That(frame.Header.FIN, Is.True);
             Assert.That(frame.Header.MASK, Is.False);
             Assert.That(frame.PayloadLength, Is.EqualTo(length));
@@ -41,7 +42,7 @@ namespace UnitTests
         public void TestInsufficientData(byte[] message)
         {
             var stream = new MemoryStream(message);
-            Assert.ThrowsAsync<IOException>(() => WsDissector.ReadFrameHeader(stream, true));
+            Assert.ThrowsAsync<IOException>(() => WsDissector.ReadFrameHeader(stream, true, CancellationToken.None));
         }
     }
 }

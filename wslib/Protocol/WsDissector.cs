@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 using wslib.Utils;
 
@@ -8,11 +9,11 @@ namespace wslib.Protocol
 {
     public static class WsDissector
     {
-        public static async Task<WsFrame> ReadFrameHeader(Stream stream, bool expectMask)
+        public static async Task<WsFrame> ReadFrameHeader(Stream stream, bool expectMask, CancellationToken cancellationToken)
         {
             var buf = new byte[14];
             var headerLength = expectMask ? 6 : 2;
-            await stream.ReadUntil(buf, 0, headerLength).ConfigureAwait(false);
+            await stream.ReadUntil(buf, 0, headerLength, cancellationToken).ConfigureAwait(false);
 
             bool actualMask = (buf[1] > 127);
             if (expectMask ^ actualMask)
@@ -24,13 +25,13 @@ namespace wslib.Protocol
             {
                 if (payloadLength == 126)
                 {
-                    await stream.ReadUntil(buf, headerLength, headerLength + 2).ConfigureAwait(false);
+                    await stream.ReadUntil(buf, headerLength, headerLength + 2, cancellationToken).ConfigureAwait(false);
                     payloadLength = StreamExtensions.ReadN(buf, 2, 2);
                     maskOffset = 4;
                 }
                 else if (payloadLength == 127)
                 {
-                    await stream.ReadUntil(buf, headerLength, headerLength + 8).ConfigureAwait(false);
+                    await stream.ReadUntil(buf, headerLength, headerLength + 8, cancellationToken).ConfigureAwait(false);
                     payloadLength = StreamExtensions.ReadN(buf, 2, 8);
                     maskOffset = 10;
                 }

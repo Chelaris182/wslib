@@ -34,7 +34,7 @@ namespace wslib.Protocol
             framePosition += (ulong)r;
             if (framePayloadLen == 0 && !currentFrame.Header.FIN)
             {
-                currentFrame = await WsDissector.ReadFrameHeader(InnerStream, currentFrame.Header.MASK).ConfigureAwait(false); // TODO: close connection gracefully
+                currentFrame = await WsDissector.ReadFrameHeader(InnerStream, currentFrame.Header.MASK, cancellationToken).ConfigureAwait(false); // TODO: close connection gracefully
                 if (currentFrame.Header.OPCODE != WsFrameHeader.Opcodes.CONTINUATION) throw new ProtocolViolationException();
                 framePayloadLen = currentFrame.PayloadLength;
                 framePosition = 0;
