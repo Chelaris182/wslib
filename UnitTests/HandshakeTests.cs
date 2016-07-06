@@ -58,8 +58,6 @@ namespace UnitTests
             composer.Verify(httpComposer => httpComposer.WriteResponse(It.IsAny<HttpResponse>(), Stream.Null));
             Assert.That(handShakeResult.Stream, Is.EqualTo(Stream.Null));
             Assert.That(spyedResponse.Status, Is.EqualTo(HttpStatusCode.SwitchingProtocols));
-            Assert.That(spyedResponse.Headers["Upgrade"], Is.EqualTo("websocket"));
-            Assert.That(spyedResponse.Headers["Connection"], Is.EqualTo("Upgrade"));
             Assert.That(spyedResponse.Headers["Sec-WebSocket-Accept"], Is.EqualTo("s3pPLMBiTxaQ9kYGzzhZRbK+xOo="));
         }
 

@@ -106,9 +106,6 @@ namespace wslib.Negotiate
             var bytes = Encoding.UTF8.GetBytes(value + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
             var acceptKey = Convert.ToBase64String(sha1.ComputeHash(bytes));
             httpResponse.Headers.Add("Sec-WebSocket-Accept", acceptKey);
-
-            httpResponse.Headers["Upgrade"] = "websocket";
-            httpResponse.Headers["Connection"] = "Upgrade";
         }
 
         private void validateRequest(HttpRequest httpRequest)
