@@ -22,7 +22,7 @@ namespace wslib
             this.options = options;
             this.appFunc = appFunc;
             listener = new TcpListener(options.Endpoint);
-            negotiator = new Negotiator(options.NegotiateOptions);
+            negotiator = new Negotiator(options.HandshakeOptions);
         }
 
         public void StartAccepting()

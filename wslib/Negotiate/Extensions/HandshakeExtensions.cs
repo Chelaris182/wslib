@@ -4,7 +4,7 @@ using System.Text;
 
 namespace wslib.Negotiate.Extensions
 {
-    class NegotiateExtensions
+    static class HandshakeExtensions
     {
         public static IEnumerable<ExtensionRequest> ParseExtensionHeader(string value)
         {

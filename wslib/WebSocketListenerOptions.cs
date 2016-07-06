@@ -11,7 +11,7 @@ namespace wslib
         public int TcpBacklog = int.MaxValue;
         public int MaxOutstandingAccepts = 5 * Environment.ProcessorCount;
         public int MaxOutstandingRequests = int.MaxValue;
-        public NegotiateOptions NegotiateOptions = new NegotiateOptions();
+        public HandshakeOptions HandshakeOptions = new HandshakeOptions();
         public bool UseSSL = false;
         public X509Certificate2 certificate;
     }

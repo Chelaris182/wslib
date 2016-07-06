@@ -46,8 +46,8 @@
     <Compile Include="Negotiate\HttpParser.cs" />
     <Compile Include="Negotiate\IHttpComposer.cs" />
     <Compile Include="Negotiate\IHttpParser.cs" />
-    <Compile Include="Negotiate\Extensions\NegotiateExtensions.cs" />
-    <Compile Include="Negotiate\NegotiateOptions.cs" />
+    <Compile Include="Negotiate\Extensions\HandshakeExtensions.cs" />
+    <Compile Include="Negotiate\HandshakeOptions.cs" />
     <Compile Include="Negotiate\WsHandshake.cs" />
     <Compile Include="Negotiate\Negotiator.cs" />
     <Compile Include="Protocol\CloseStatusCode.cs" />
@@ -56,6 +56,7 @@
     <Compile Include="Protocol\IMessageExtension.cs" />
     <Compile Include="Protocol\Exceptions\WsCloseException.cs" />
     <Compile Include="Protocol\Writer\IWsMessageWriteStream.cs" />
+    <Compile Include="Utils\TaskExtensions.cs" />
     <Compile Include="Utils\WsWriterWrapper.cs" />
     <Compile Include="Utils\StreamWrapper.cs" />
     <Compile Include="Protocol\Writer\WsWireStream.cs" />

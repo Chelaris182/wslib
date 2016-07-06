@@ -20,7 +20,7 @@ namespace wslib.DeflateExtension
             using (DeflateStream deflateStream = new DeflateStream(proxy, CompressionMode.Compress))
             {
                 deflateStream.Write(buffer, offset, count);
-            } // deflateStream flushes internal data on dipose only
+            } // deflateStream flushes internal data on dispose only
 
             wsFrameHeader.RSV1 = true;
             var deflatedData = proxy.ToArray();

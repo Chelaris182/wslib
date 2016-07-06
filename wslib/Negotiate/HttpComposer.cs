@@ -6,7 +6,7 @@ using System.Web;
 
 namespace wslib.Negotiate
 {
-    class HttpComposer : IHttpComposer
+    public class HttpComposer : IHttpComposer
     {
         public async Task WriteResponse(HttpResponse httpResponse, Stream stream)
         {

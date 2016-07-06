@@ -17,15 +17,15 @@ namespace wslib.Protocol
         private Dictionary<string, object> env;
         private readonly Stream stream;
         private readonly List<IMessageExtension> extensions;
-        private readonly bool serverSide;
+        private readonly bool serverSocket;
         private readonly SemaphoreSlim writeSemaphore = new SemaphoreSlim(1, 1);
 
-        public WebSocket(Dictionary<string, object> env, Stream stream, List<IMessageExtension> extensions, bool serverSide)
+        public WebSocket(Dictionary<string, object> env, Stream stream, List<IMessageExtension> extensions, bool serverSocket)
         {
             this.env = env;
             this.stream = stream;
             this.extensions = extensions;
-            this.serverSide = serverSide;
+            this.serverSocket = serverSocket;
         }
 
         public void Dispose()
@@ -40,7 +40,7 @@ namespace wslib.Protocol
             {
                 while (IsConnected())
                 {
-                    var frame = await WsDissector.ReadFrameHeader(stream, serverSide).ConfigureAwait(false); // TODO: close connection gracefully
+                    var frame = await WsDissector.ReadFrameHeader(stream, serverSocket).ConfigureAwait(false);
                     if (!isDataFrame(frame))
                     {
                         await processControlFrame(frame).ConfigureAwait(false);

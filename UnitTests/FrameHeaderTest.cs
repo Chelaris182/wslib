@@ -1,4 +1,5 @@
-﻿using NUnit.Framework;
+﻿using System.Threading.Tasks;
+using NUnit.Framework;
 using wslib.Protocol;
 
 namespace UnitTests
@@ -24,6 +25,20 @@ namespace UnitTests
             Assert.That(frame.FIN, Is.False);
             Assert.That(frame.OPCODE, Is.EqualTo(WsFrameHeader.Opcodes.PONG));
             Assert.That(frame.MASK, Is.True);
+        }
+
+        [Test]
+        [TestCase(new byte[] { 0x00, 0x00 }, false, false, WsFrameHeader.Opcodes.CONTINUATION)]
+        [TestCase(new byte[] { 0x80, 0x00 }, true, false, WsFrameHeader.Opcodes.CONTINUATION)]
+        [TestCase(new byte[] { 0xC0, 0x00 }, true, true, WsFrameHeader.Opcodes.CONTINUATION)]
+        [TestCase(new byte[] { 0xC1, 0x00 }, true, true, WsFrameHeader.Opcodes.TEXT)]
+        [TestCase(new byte[] { 0x42, 0x00 }, false, true, WsFrameHeader.Opcodes.BINARY)]
+        public async Task TestBits(byte[] message, bool fin, bool rsv1, WsFrameHeader.Opcodes opcode)
+        {
+            var frame = new WsFrameHeader(message[0], message[1]);
+            Assert.That(frame.FIN, Is.EqualTo(fin));
+            Assert.That(frame.RSV1, Is.EqualTo(rsv1));
+            Assert.That(frame.OPCODE, Is.EqualTo(opcode));
         }
     }
 }

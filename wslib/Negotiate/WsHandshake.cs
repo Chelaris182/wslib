@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
@@ -53,10 +54,12 @@ namespace wslib.Negotiate
 
         private List<IMessageExtension> negotiateExtensions(HttpRequest httpRequest, HttpResponse httpResponse)
         {
+            if (!serverExtensions.Any()) return new List<IMessageExtension>();
+
             string value;
             if (httpRequest.Headers.TryGetValue("Sec-WebSocket-Extensions", out value))
             {
-                IEnumerable<ExtensionRequest> clientExtensions = NegotiateExtensions.ParseExtensionHeader(value);
+                IEnumerable<ExtensionRequest> clientExtensions = HandshakeExtensions.ParseExtensionHeader(value);
 
                 var matchedExtensions = new List<ExtensionRequest>();
                 var messageExtensions = new List<IMessageExtension>();
@@ -77,7 +80,7 @@ namespace wslib.Negotiate
 
                 if (messageExtensions.Count == 0) return messageExtensions;
 
-                string header = NegotiateExtensions.ComposeExtensionHeader(matchedExtensions);
+                string header = HandshakeExtensions.ComposeExtensionHeader(matchedExtensions);
                 httpResponse.Headers["Sec-WebSocket-Extensions"] = header;
                 return messageExtensions;
             }
@@ -103,17 +106,24 @@ namespace wslib.Negotiate
             var bytes = Encoding.UTF8.GetBytes(value + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
             var acceptKey = Convert.ToBase64String(sha1.ComputeHash(bytes));
             httpResponse.Headers.Add("Sec-WebSocket-Accept", acceptKey);
+
+            httpResponse.Headers["Upgrade"] = "websocket";
+            httpResponse.Headers["Connection"] = "Upgrade";
         }
 
         private void validateRequest(HttpRequest httpRequest)
         {
             string value;
+            if (!httpRequest.Headers.ContainsKey("Host"))
+                throw new HandshakeException("no or bad Host header");
             if (!httpRequest.Headers.TryGetValue("Upgrade", out value) || !value.Equals("websocket", StringComparison.InvariantCultureIgnoreCase))
-                throw new HandshakeException("no or bad upgrade header");
+                throw new HandshakeException("no or bad Upgrade header");
+            if (!httpRequest.Headers.TryGetValue("Connection", out value) || !value.Equals("Upgrade", StringComparison.InvariantCultureIgnoreCase))
+                throw new HandshakeException("no or bad Connection header");
             if (!httpRequest.Headers.ContainsKey("Sec-WebSocket-Key"))
-                throw new HandshakeException("no sec-websocket-key header");
+                throw new HandshakeException("no Sec-WebSocket-Key header");
             if (!httpRequest.Headers.TryGetValue("Sec-WebSocket-Version", out value) || !value.Equals("13"))
-                throw new HandshakeException("no or bad sec-websocket-version header");
+                throw new HandshakeException("no or bad Sec-WebSocket-Version header");
         }
     }
 }
