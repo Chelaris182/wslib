@@ -11,5 +11,6 @@ namespace wslib
         Task<WsMessage> ReadMessageAsync(CancellationToken cancellationToken);
         Task<WsMessageWriter> CreateMessageWriter(MessageType type, CancellationToken cancellationToken);
         bool IsConnected();
+        Task CloseAsync(CloseStatusCode statusCode, CancellationToken cancellationToken);
     }
 }

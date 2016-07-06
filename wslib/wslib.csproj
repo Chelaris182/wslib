@@ -52,6 +52,7 @@
     <Compile Include="Negotiate\Negotiator.cs" />
     <Compile Include="Protocol\CloseStatusCode.cs" />
     <Compile Include="DeflateExtension\MessageDeflateExtension.cs" />
+    <Compile Include="Protocol\Heartbit.cs" />
     <Compile Include="Protocol\IServerExtension.cs" />
     <Compile Include="Protocol\IMessageExtension.cs" />
     <Compile Include="Protocol\Exceptions\WsCloseException.cs" />

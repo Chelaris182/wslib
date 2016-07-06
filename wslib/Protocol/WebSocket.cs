@@ -13,53 +13,26 @@ namespace wslib.Protocol
     public class WebSocket : IWebSocket
     {
         public bool IsConnected() => stream.CanRead;
+        public Dictionary<string, object> Env;
 
-        private Dictionary<string, object> env;
         private readonly Stream stream;
         private readonly List<IMessageExtension> extensions;
         private readonly bool serverSocket;
         private readonly SemaphoreSlim writeSemaphore = new SemaphoreSlim(1, 1);
-        private DateTime lastActivity;
-        private bool isClosing;
+        private int isClosing;
+        internal DateTime LastActivity = DateTime.Now;
 
         public WebSocket(Dictionary<string, object> env, Stream stream, List<IMessageExtension> extensions, bool serverSocket)
         {
-            this.env = env;
+            Env = env;
             this.stream = stream;
             this.extensions = extensions;
             this.serverSocket = serverSocket;
-
-            runHeartbit();
-        }
-
-        private async Task runHeartbit()
-        {
-            lastActivity = DateTime.Now;
-
-            while (IsConnected())
-            {
-                var now = DateTime.Now;
-                if (lastActivity.Add(TimeSpan.FromSeconds(10)) < now)
-                {
-                    await closeConnection(CloseStatusCode.ProtocolError, CancellationToken.None).ConfigureAwait(false);
-                    return;
-                }
-
-                var pingTime = lastActivity.Add(TimeSpan.FromSeconds(5));
-                var toSleep = pingTime - now;
-                if (pingTime < now)
-                {
-                    await sendPing(new byte[] { 0x00 }, CancellationToken.None).ConfigureAwait(false);
-                    toSleep = TimeSpan.FromSeconds(5);
-                }
-
-                await Task.Delay(toSleep).ConfigureAwait(false);
-            }
         }
 
         private void refreshActivity()
         {
-            lastActivity = DateTime.Now;
+            LastActivity = DateTime.Now;
         }
 
         public void Dispose()
@@ -97,7 +70,7 @@ namespace wslib.Protocol
             }
             catch (ProtocolViolationException e)
             {
-                await closeConnection(CloseStatusCode.ProtocolError, cancellationToken).ConfigureAwait(false); // TODO: may throw exception?
+                await CloseAsync(CloseStatusCode.ProtocolError, cancellationToken).ConfigureAwait(false); // TODO: may throw exception?
             }
             catch (InvalidOperationException e) // happens when read or write happens on a closed socket
             {
@@ -119,14 +92,14 @@ namespace wslib.Protocol
         {
             if (frame.PayloadLength > 1024)
             {
-                await closeConnection(CloseStatusCode.MessageTooLarge, cancellationToken).ConfigureAwait(false);
+                await CloseAsync(CloseStatusCode.MessageTooLarge, cancellationToken).ConfigureAwait(false);
                 return;
             }
 
             if (!frame.Header.FIN)
             {
                 // current code doesn't support multi-frame control messages
-                await closeConnection(CloseStatusCode.UnexpectedCondition, cancellationToken).ConfigureAwait(false);
+                await CloseAsync(CloseStatusCode.UnexpectedCondition, cancellationToken).ConfigureAwait(false);
                 return;
             }
 
@@ -137,12 +110,10 @@ namespace wslib.Protocol
             switch (frame.Header.OPCODE)
             {
                 case WsFrameHeader.Opcodes.CLOSE:
-                    if (isClosing) return;
-
                     if (payload.Length >= 2)
-                        await closeConnection(payload, cancellationToken).ConfigureAwait(false);
+                        await closeAsync(payload, cancellationToken).ConfigureAwait(false);
                     else
-                        await closeConnection(CloseStatusCode.NormalClosure, cancellationToken).ConfigureAwait(false);
+                        await CloseAsync(CloseStatusCode.NormalClosure, cancellationToken).ConfigureAwait(false);
                     return;
 
                 case WsFrameHeader.Opcodes.PING:
@@ -158,18 +129,19 @@ namespace wslib.Protocol
             }
         }
 
-        private Task closeConnection(CloseStatusCode statusCode, CancellationToken cancellationToken)
+        public Task CloseAsync(CloseStatusCode statusCode, CancellationToken cancellationToken)
         {
             var s = (short)statusCode;
-            return closeConnection(new[] { (byte)(s >> 8), (byte)(s & 0xff) }, cancellationToken);
+            return closeAsync(new[] { (byte)(s >> 8), (byte)(s & 0xff) }, cancellationToken);
         }
 
-        private async Task closeConnection(byte[] closeCode, CancellationToken cancellationToken)
+        private async Task closeAsync(byte[] closeCode, CancellationToken cancellationToken)
         {
-            isClosing = true;
+            if (Interlocked.CompareExchange(ref isClosing, 1, 0) != 0) return;
+
             try
             {
-                await sendControlMessage(WsFrameHeader.Opcodes.CLOSE, closeCode, cancellationToken).ConfigureAwait(false);
+                await SendMessage(WsFrameHeader.Opcodes.CLOSE, closeCode, cancellationToken).ConfigureAwait(false);
             }
             finally
             {
@@ -177,14 +149,9 @@ namespace wslib.Protocol
             }
         }
 
-        private async Task sendPing(byte[] payload, CancellationToken cancellationToken)
-        {
-            await sendControlMessage(WsFrameHeader.Opcodes.PING, payload, cancellationToken).ConfigureAwait(false);
-        }
-
         private async Task sendPong(byte[] payload, CancellationToken cancellationToken)
         {
-            await sendControlMessage(WsFrameHeader.Opcodes.PONG, payload, cancellationToken).ConfigureAwait(false);
+            await SendMessage(WsFrameHeader.Opcodes.PONG, payload, cancellationToken).ConfigureAwait(false);
         }
 
         private static bool isDataFrame(WsFrame frame)
@@ -192,7 +159,7 @@ namespace wslib.Protocol
             return frame.Header.OPCODE == WsFrameHeader.Opcodes.BINARY || frame.Header.OPCODE == WsFrameHeader.Opcodes.TEXT;
         }
 
-        private async Task sendControlMessage(WsFrameHeader.Opcodes opcode, byte[] payload, CancellationToken cancellationToken)
+        public async Task SendMessage(WsFrameHeader.Opcodes opcode, byte[] payload, CancellationToken cancellationToken)
         {
             await writeSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false); // TODO: timeout
             try

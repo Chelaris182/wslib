@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using wslib.Negotiate;
+using wslib.Protocol;
 
 namespace wslib
 {
@@ -71,8 +72,9 @@ namespace wslib
 
         private async Task processRequestAsync(Stream stream)
         {
-            using (IWebSocket ws = await negotiator.Negotiate(stream).ConfigureAwait(false))
+            using (WebSocket ws = await negotiator.Negotiate(stream).ConfigureAwait(false))
             {
+                Heartbit.RunHeartbit(ws); // fire&forget // TODO: log errors
                 await appFunc(ws).ConfigureAwait(false);
             }
         }
