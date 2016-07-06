@@ -25,7 +25,7 @@ namespace UnitTests
 
                 randomString = RandomGeneration.RandomString(1, 4096);
                 var payload2 = Encoding.UTF8.GetBytes(randomString);
-                using (var writer = new WsMessageWriter(MessageType.Text, () => { }, new WsWireStream(true, source)))
+                using (var writer = new WsMessageWriter(MessageType.Text, () => { }, new WsWireStream(source)))
                 {
                     await writer.WriteMessageAsync(payload1, 0, payload1.Length, CancellationToken.None);
                     await writer.WriteMessageAsync(payload2, 0, payload2.Length, CancellationToken.None);

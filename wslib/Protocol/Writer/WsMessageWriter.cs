@@ -17,33 +17,33 @@ namespace wslib.Protocol.Writer
             this.stream = stream;
         }
 
-        public async Task WriteFrameAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        public Task WriteFrame(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
-            await writeFrameHeader(false, count, cancellationToken).ConfigureAwait(false); // TODO: fix continuation opcode
-            await stream.WriteAsync(buffer, offset, count, cancellationToken).ConfigureAwait(false);
+            var header = generateFrameHeader(false); // TODO: change opcode to continuation
+            return stream.WriteFrame(header, buffer, offset, count, cancellationToken);
         }
 
-        public async Task CloseMessageAsync(CancellationToken cancellationToken)
+        public Task CloseMessageAsync(CancellationToken cancellationToken)
         {
-            await writeFrameHeader(true, 0, cancellationToken).ConfigureAwait(false);
-            await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            var header = generateFrameHeader(true);
+            return stream.WriteFrame(header, new byte[0], 0, 0, cancellationToken);
         }
 
-        public async Task WriteMessageAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        public Task WriteMessageAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
-            await writeFrameHeader(true, count, cancellationToken).ConfigureAwait(false);
-            await stream.WriteAsync(buffer, offset, count, cancellationToken).ConfigureAwait(false);
-            await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            var header = generateFrameHeader(true);
+            return stream.WriteFrame(header, buffer, offset, count, cancellationToken);
         }
 
-        private Task writeFrameHeader(bool finFlag, int payloadLen, CancellationToken cancellationToken)
+        private WsFrameHeader generateFrameHeader(bool finFlag)
         {
             var opcode = messageType == MessageType.Text ? WsFrameHeader.Opcodes.TEXT : WsFrameHeader.Opcodes.BINARY;
-            return stream.WriteHeader(opcode, finFlag, false, payloadLen, cancellationToken);
+            return new WsFrameHeader(0, 0) { FIN = finFlag, OPCODE = opcode };
         }
 
         public void Dispose()
         {
+            stream.Dispose();
             onDispose();
         }
     }

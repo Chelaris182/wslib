@@ -8,21 +8,25 @@ namespace wslib.Protocol
         public bool FIN
         {
             get { return byte1.HasFlag(7); }
+            set { ByteExtensions.SetFlag(ref byte1, 7, value); }
         }
 
         public bool RSV1
         {
             get { return byte1.HasFlag(6); }
+            set { ByteExtensions.SetFlag(ref byte1, 6, value); }
         }
 
         public bool RSV2
         {
             get { return byte1.HasFlag(5); }
+            set { ByteExtensions.SetFlag(ref byte1, 5, value); }
         }
 
         public bool RSV3
         {
             get { return byte1.HasFlag(4); }
+            set { ByteExtensions.SetFlag(ref byte1, 4, value); }
         }
 
         public enum Opcodes
@@ -38,15 +42,20 @@ namespace wslib.Protocol
         public Opcodes OPCODE
         {
             get { return (Opcodes)(byte1 & 0x0F); }
+            set { byte1 = (byte)((byte1 & 0xF0) | (byte)value); }
         }
 
-        public bool MASK
-        {
-            get { return byte2.HasFlag(7); }
-        }
+        public bool MASK => byte2.HasFlag(7);
 
-        private readonly byte byte1;
+        private byte byte1;
         private readonly byte byte2;
+
+        public void CopyTo(ArraySegment<byte> arraySegment)
+        {
+            if (arraySegment.Count < 2) throw new ArgumentException("not enough data to copy frame header");
+            arraySegment.Array[arraySegment.Offset] = byte1;
+            arraySegment.Array[arraySegment.Offset + 1] = byte2;
+        }
 
         public WsFrameHeader(byte byte1, byte byte2)
         {
@@ -63,6 +72,14 @@ namespace wslib.Protocol
         public static bool HasFlag(this byte b, int num)
         {
             return (b & (1 << num)) != 0;
+        }
+
+        public static void SetFlag(ref byte b, int num, bool value)
+        {
+            if (value)
+                b |= (byte)(1 << num);
+            else
+                b &= (byte)~(1 << num);
         }
     }
 }

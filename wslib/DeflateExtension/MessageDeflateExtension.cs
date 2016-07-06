@@ -16,8 +16,7 @@ namespace wslib.DeflateExtension
 
         public IWsMessageWriteStream ApplyWrite(IWsMessageWriteStream stream)
         {
-            stream = new WsSplitStream(stream);
-            return WsDeflateWriteStream.Create(stream);
+            return new WsDeflateWriteStream(stream);
         }
     }
 }

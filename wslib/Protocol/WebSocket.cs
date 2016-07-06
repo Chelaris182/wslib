@@ -76,7 +76,7 @@ namespace wslib.Protocol
         public async Task<WsMessageWriter> CreateMessageWriter(MessageType type, CancellationToken cancellationToken)
         {
             await writeSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-            IWsMessageWriteStream s = new WsWireStream(true, stream);
+            IWsMessageWriteStream s = new WsWireStream(stream);
             s = extensions.Aggregate(s, (current, extension) => extension.ApplyWrite(current));
             return new WsMessageWriter(type, () => writeSemaphore.Release(), s); // TODO replace action with disposable object
         }
@@ -122,7 +122,7 @@ namespace wslib.Protocol
             await writeSemaphore.WaitAsync(CancellationToken.None).ConfigureAwait(false); // TODO: cancellation token / timeout
             try
             {
-                var header = WsDissector.CreateFrameHeader(true, false, WsFrameHeader.Opcodes.CLOSE, 2);
+                var header = WsDissector.SerializeFrameHeader(new WsFrameHeader(0, 0) { FIN = true, OPCODE = WsFrameHeader.Opcodes.CLOSE }, 2);
                 await stream.WriteAsync(header.Array, header.Offset, header.Count).ConfigureAwait(false);
                 await stream.WriteAsync(new[] { code1, code2 }, 0, 2).ConfigureAwait(false);
                 stream.Close();
@@ -138,7 +138,7 @@ namespace wslib.Protocol
             await writeSemaphore.WaitAsync(CancellationToken.None).ConfigureAwait(false); // TODO: cancellation token / timeout
             try
             {
-                var header = WsDissector.CreateFrameHeader(true, false, WsFrameHeader.Opcodes.PONG, 2);
+                var header = WsDissector.SerializeFrameHeader(new WsFrameHeader(0, 0) { FIN = true, OPCODE = WsFrameHeader.Opcodes.PONG }, payload.Length);
                 await stream.WriteAsync(header.Array, header.Offset, header.Count).ConfigureAwait(false);
                 await stream.WriteAsync(payload, 0, payload.Length).ConfigureAwait(false);
             }

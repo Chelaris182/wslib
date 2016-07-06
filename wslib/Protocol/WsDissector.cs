@@ -48,17 +48,15 @@ namespace wslib.Protocol
             return frame;
         }
 
-        public static ArraySegment<byte> CreateFrameHeader(bool finFlag, bool rsv1, WsFrameHeader.Opcodes opcode, int payloadLen)
+        public static ArraySegment<byte> SerializeFrameHeader(WsFrameHeader wsFrameHeader, int payloadLen)
         {
             int headerLen = 2;
             byte[] header = new byte[10];
-            header[0] = (byte)(finFlag ? 0x80 : 0);
-            if (rsv1)
-                header[0] |= 0x40;
-            header[0] |= (byte)opcode;
+            wsFrameHeader.CopyTo(new ArraySegment<byte>(header, 0, 2));
+
             if (payloadLen <= 125)
             {
-                header[1] = (byte)payloadLen;
+                header[1] |= (byte)payloadLen;
             }
             else if (payloadLen < ushort.MaxValue)
             {
