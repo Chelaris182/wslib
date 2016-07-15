@@ -45,10 +45,14 @@ namespace wslib.Protocol
             set { byte1 = (byte)((byte1 & 0xF0) | (byte)value); }
         }
 
-        public bool MASK => byte2.HasFlag(7);
+        public bool MASK
+        {
+            get { return byte2.HasFlag(7); }
+            set { ByteExtensions.SetFlag(ref byte2, 7, value); }
+        }
 
         private byte byte1;
-        private readonly byte byte2;
+        private byte byte2;
 
         public void CopyTo(ArraySegment<byte> arraySegment)
         {

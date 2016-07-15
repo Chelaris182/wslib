@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using wslib.Protocol.Reader;
 using wslib.Protocol.Writer;
 using wslib.Utils;
 
@@ -45,32 +46,32 @@ namespace wslib.Protocol
         {
             try
             {
-                while (IsConnected())
+                WsFrame frame = await ReadFrameAsync(cancellationToken).ConfigureAwait(false);
+                if (frame == null) return null;
+
+                if (frame.Header.OPCODE == WsFrameHeader.Opcodes.CONTINUATION) throw new ProtocolViolationException("unexpected frame type: " + frame.Header.OPCODE);
+                var messageType = frame.Header.OPCODE == WsFrameHeader.Opcodes.TEXT ? MessageType.Text : MessageType.Binary;
+                var wsMesageReadStream = new WsMesageReader(this, frame);
+                Stream payloadStream = new WsReadStream(wsMesageReadStream);
+                if (extensions != null)
                 {
-                    var frame = await WsDissector.ReadFrameHeader(stream, serverSocket, cancellationToken).ConfigureAwait(false);
-                    if (!isDataFrame(frame))
-                    {
-                        await processControlFrame(frame, cancellationToken).ConfigureAwait(false);
-                        continue;
-                    }
-
-                    var messageType = frame.Header.OPCODE == WsFrameHeader.Opcodes.TEXT ? MessageType.Text : MessageType.Binary;
-                    Stream payloadStream = new WsMesageReadStream(frame, stream, refreshActivity);
-                    if (extensions != null)
-                    {
-                        payloadStream = extensions.Aggregate(payloadStream, (current, extension) => extension.ApplyRead(current, frame));
-                    }
-
-                    return new WsMessage(messageType, payloadStream);
+                    payloadStream = extensions.Aggregate(payloadStream, (current, extension) => extension.ApplyRead(current, frame));
                 }
+
+                return new WsMessage(messageType, payloadStream);
             }
             catch (IOException e) // happens when read or write returns error
             {
-                stream.Close(); // TODO: log
+                // TODO: log?
             }
             catch (ProtocolViolationException e)
             {
-                await CloseAsync(CloseStatusCode.ProtocolError, cancellationToken).ConfigureAwait(false); // TODO: may throw exception?
+                if (IsConnected())
+                {
+                    await CloseAsync(CloseStatusCode.ProtocolError, cancellationToken).ConfigureAwait(false); // TODO: may throw exception?
+                }
+
+                throw;
             }
             catch (InvalidOperationException e) // happens when read or write happens on a closed socket
             {
@@ -78,6 +79,30 @@ namespace wslib.Protocol
             }
 
             return null;
+        }
+
+        internal async Task<WsFrame> ReadFrameAsync(CancellationToken cancellationToken)
+        {
+            while (IsConnected())
+            {
+                var frame = await WsDissector.ReadFrameHeader(stream, serverSocket, cancellationToken).ConfigureAwait(false);
+                if (!isDataFrame(frame))
+                {
+                    await processControlFrame(frame, cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                return frame;
+            }
+
+            return null;
+        }
+
+        internal async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            var r = await stream.ReadAsync(buffer, offset, count, cancellationToken).ConfigureAwait(false);
+            if (r > 0) refreshActivity();
+            return r;
         }
 
         public async Task<WsMessageWriter> CreateMessageWriter(MessageType type, CancellationToken cancellationToken)
@@ -93,19 +118,18 @@ namespace wslib.Protocol
             if (frame.PayloadLength > 1024)
             {
                 await CloseAsync(CloseStatusCode.MessageTooLarge, cancellationToken).ConfigureAwait(false);
-                return;
+                throw new ProtocolViolationException("control frame is too large");
             }
 
             if (!frame.Header.FIN)
             {
                 // current code doesn't support multi-frame control messages
                 await CloseAsync(CloseStatusCode.UnexpectedCondition, cancellationToken).ConfigureAwait(false);
-                return;
+                throw new ProtocolViolationException("multi-frame control frames aren't supported");
             }
 
             byte[] payload = new byte[frame.PayloadLength];
             await stream.ReadUntil(payload, 0, payload.Length, cancellationToken).ConfigureAwait(false);
-            refreshActivity();
 
             switch (frame.Header.OPCODE)
             {
@@ -156,7 +180,7 @@ namespace wslib.Protocol
 
         private static bool isDataFrame(WsFrame frame)
         {
-            return frame.Header.OPCODE == WsFrameHeader.Opcodes.BINARY || frame.Header.OPCODE == WsFrameHeader.Opcodes.TEXT;
+            return frame.Header.OPCODE == WsFrameHeader.Opcodes.BINARY || frame.Header.OPCODE == WsFrameHeader.Opcodes.TEXT || frame.Header.OPCODE == WsFrameHeader.Opcodes.CONTINUATION;
         }
 
         public async Task SendMessage(WsFrameHeader.Opcodes opcode, byte[] payload, CancellationToken cancellationToken)
@@ -164,7 +188,7 @@ namespace wslib.Protocol
             await writeSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false); // TODO: timeout
             try
             {
-                var header = WsDissector.SerializeFrameHeader(new WsFrameHeader(0, 0) { FIN = true, OPCODE = opcode }, payload.Length);
+                var header = WsDissector.SerializeFrameHeader(new WsFrameHeader(0, 0) { FIN = true, OPCODE = opcode }, payload.Length, null);
                 await stream.WriteAsync(header.Array, header.Offset, header.Count, cancellationToken).ConfigureAwait(false);
                 await stream.WriteAsync(payload, 0, payload.Length, cancellationToken).ConfigureAwait(false);
             }

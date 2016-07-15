@@ -59,7 +59,6 @@ namespace UnitTests
                     using (var message = await webSocket.ReadMessageAsync(CancellationToken.None))
                     {
                         Assert.That(message, Is.Null);
-                        Assert.That(webSocket.IsConnected, Is.False);
                     }
                 }
             }

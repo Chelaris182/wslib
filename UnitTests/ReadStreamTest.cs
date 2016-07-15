@@ -1,6 +1,7 @@
 ﻿using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using UnitTests.Utils;
@@ -19,14 +20,18 @@ namespace UnitTests
             var payload = Encoding.UTF8.GetBytes(RandomGeneration.RandomString(1, 4096));
             using (var ms = new MemoryStream())
             {
+                var header = new WsFrameHeader(0, 0) { FIN = true, OPCODE = WsFrameHeader.Opcodes.BINARY };
+                var serializeFrameHeader = WsDissector.SerializeFrameHeader(header, payload.Length, null);
+                ms.Write(serializeFrameHeader.Array, serializeFrameHeader.Offset, serializeFrameHeader.Count);
                 ms.Write(payload, 0, payload.Length);
                 ms.Position = 0;
-                var header = new WsFrameHeader(0x80, 0x80);
-                var frame = new WsFrame(header, (ulong)payload.Length, new byte[] { 0, 0, 0, 0 });
-                using (var stream = new WsMesageReadStream(frame, ms, () => { }))
+
+                using (var websocket = new WebSocket(null, ms, null, false))
                 {
+                    var message = await websocket.ReadMessageAsync(CancellationToken.None);
+                    Assert.That(message, Is.Not.Null);
                     var destination = new MemoryStream();
-                    await stream.CopyToAsync(destination);
+                    await message.ReadStream.CopyToAsync(destination);
                     Assert.That(destination.ToArray(), Is.EqualTo(payload));
                 }
             }
@@ -39,15 +44,19 @@ namespace UnitTests
             var payload = Encoding.UTF8.GetBytes(RandomGeneration.RandomString(1, 4096));
             using (var ms = new MemoryStream())
             {
+                var header = new WsFrameHeader(0, 0) { FIN = true, MASK = true, OPCODE = WsFrameHeader.Opcodes.BINARY };
+                var serializeFrameHeader = WsDissector.SerializeFrameHeader(header, payload.Length, mask);
+                ms.Write(serializeFrameHeader.Array, serializeFrameHeader.Offset, serializeFrameHeader.Count);
                 for (int i = 0; i < payload.Length; i++)
                     ms.WriteByte((byte)(payload[i] ^ mask[i % 4]));
                 ms.Position = 0;
-                var header = new WsFrameHeader(0x80, 0x80);
-                var frame = new WsFrame(header, (ulong)payload.Length, mask);
-                using (var stream = new WsMesageReadStream(frame, ms, () => { }))
+
+                using (var websocket = new WebSocket(null, ms, null, true))
                 {
+                    var message = await websocket.ReadMessageAsync(CancellationToken.None);
+                    Assert.That(message, Is.Not.Null);
                     var destination = new MemoryStream();
-                    await stream.CopyToAsync(destination);
+                    await message.ReadStream.CopyToAsync(destination);
                     Assert.That(destination.ToArray(), Is.EqualTo(payload));
                 }
             }
@@ -62,21 +71,25 @@ namespace UnitTests
             var payload2 = Encoding.UTF8.GetBytes(RandomGeneration.RandomString(1, 100));
             using (var ms = new MemoryStream())
             {
+                var header = new WsFrameHeader(0, 0) { FIN = false, MASK = true, OPCODE = WsFrameHeader.Opcodes.BINARY };
+                var serializeFrameHeader = WsDissector.SerializeFrameHeader(header, payload1.Length, mask1);
+                ms.Write(serializeFrameHeader.Array, serializeFrameHeader.Offset, serializeFrameHeader.Count);
                 for (int i = 0; i < payload1.Length; i++)
                     ms.WriteByte((byte)(payload1[i] ^ mask1[i % 4]));
-                ms.WriteByte(0x80); // second header (FIN FLAG | CONTINUATION)
-                ms.WriteByte((byte)(0x80 | payload2.Length)); // (MASK | length)
-                ms.Write(mask2, 0, mask2.Length);
+
+                header = new WsFrameHeader(0, 0) { FIN = true, MASK = true, OPCODE = WsFrameHeader.Opcodes.CONTINUATION };
+                serializeFrameHeader = WsDissector.SerializeFrameHeader(header, payload2.Length, mask2);
+                ms.Write(serializeFrameHeader.Array, serializeFrameHeader.Offset, serializeFrameHeader.Count);
                 for (int i = 0; i < payload2.Length; i++)
                     ms.WriteByte((byte)(payload2[i] ^ mask2[i % 4]));
 
                 ms.Position = 0;
-                var header = new WsFrameHeader(0x00, 0x80);
-                var frame = new WsFrame(header, (ulong)payload1.Length, mask1);
-                using (var stream = new WsMesageReadStream(frame, ms, () => { }))
+                using (var websocket = new WebSocket(null, ms, null, true))
                 {
+                    var message = await websocket.ReadMessageAsync(CancellationToken.None);
+                    Assert.That(message, Is.Not.Null);
                     var destination = new MemoryStream();
-                    await stream.CopyToAsync(destination);
+                    await message.ReadStream.CopyToAsync(destination);
                     var r = destination.ToArray();
                     Assert.That(r.Take(payload1.Length), Is.EqualTo(payload1));
                     Assert.That(r.Skip(payload1.Length), Is.EqualTo(payload2));

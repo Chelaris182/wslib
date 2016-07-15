@@ -1,34 +1,31 @@
 ﻿using System;
-using System.IO;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
-using wslib.Utils;
 
 namespace wslib.Protocol
 {
-    public class WsMesageReadStream : StreamWrapper
+    public class WsMesageReader
     {
+        private readonly WebSocket ws;
         private WsFrame currentFrame;
-        private readonly Action refreshActivity;
         private ulong framePayloadLen;
         private ulong framePosition;
 
-        public WsMesageReadStream(WsFrame frame, Stream innerStream, Action refreshActivity) : base(innerStream, false)
+        public WsMesageReader(WebSocket ws, WsFrame frame)
         {
+            this.ws = ws;
             currentFrame = frame;
-            this.refreshActivity = refreshActivity;
             framePayloadLen = frame.PayloadLength;
         }
 
-        public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        public async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
             int toRead = (int)Math.Min(framePayloadLen, (ulong)count);
             if (toRead == 0) return 0;
 
-            var r = await base.ReadAsync(buffer, offset, toRead, cancellationToken).ConfigureAwait(false);
+            var r = await ws.ReadAsync(buffer, offset, toRead, cancellationToken).ConfigureAwait(false);
             if (r <= 0) return r;
-            refreshActivity();
 
             if (currentFrame.Header.MASK)
                 unmask(buffer, offset, r);
@@ -37,7 +34,7 @@ namespace wslib.Protocol
             framePosition += (ulong)r;
             if (framePayloadLen == 0 && !currentFrame.Header.FIN)
             {
-                currentFrame = await WsDissector.ReadFrameHeader(InnerStream, currentFrame.Header.MASK, cancellationToken).ConfigureAwait(false); // TODO: close connection gracefully
+                currentFrame = await ws.ReadFrameAsync(cancellationToken).ConfigureAwait(false); // TODO: close connection gracefully
                 if (currentFrame.Header.OPCODE != WsFrameHeader.Opcodes.CONTINUATION) throw new ProtocolViolationException();
                 framePayloadLen = currentFrame.PayloadLength;
                 framePosition = 0;
@@ -54,7 +51,5 @@ namespace wslib.Protocol
                 framePosition++;
             }
         }
-
-        public override bool CanWrite => false;
     }
 }

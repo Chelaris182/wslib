@@ -49,11 +49,14 @@ namespace wslib.Protocol
             return frame;
         }
 
-        public static ArraySegment<byte> SerializeFrameHeader(WsFrameHeader wsFrameHeader, int payloadLen) // TODO: accept segment as in
+        public static ArraySegment<byte> SerializeFrameHeader(WsFrameHeader wsFrameHeader, int payloadLen, byte[] mask) // TODO: accept segment as in
         {
             int headerLen = 2;
-            byte[] header = new byte[10];
+            byte[] header = new byte[14];
             wsFrameHeader.CopyTo(new ArraySegment<byte>(header, 0, 2));
+
+            if (wsFrameHeader.MASK)
+                header[1] = 0x80;
 
             if (payloadLen <= 125)
             {
@@ -62,16 +65,24 @@ namespace wslib.Protocol
             else if (payloadLen < ushort.MaxValue)
             {
                 headerLen += 2;
-                header[1] = 126;
+                header[1] |= 126;
                 header[2] = (byte)(payloadLen >> 8);
                 header[3] = (byte)(payloadLen & 0xff);
             }
             else
             {
                 headerLen += 8;
-                header[1] = 127;
+                header[1] |= 127;
                 throw new NotImplementedException(); // TODO: fix serialization
             }
+
+            if (wsFrameHeader.MASK)
+            {
+                if (mask.Length != 4) throw new ArgumentException("mask length isn't 4 bytes");
+                Buffer.BlockCopy(mask, 0, header, headerLen, 4);
+                headerLen += 4;
+            }
+
             return new ArraySegment<byte>(header, 0, headerLen);
         }
     }

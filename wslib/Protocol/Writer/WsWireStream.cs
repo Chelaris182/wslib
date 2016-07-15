@@ -13,7 +13,7 @@ namespace wslib.Protocol.Writer
 
         public async Task WriteFrame(WsFrameHeader wsFrameHeader, byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
-            var header = WsDissector.SerializeFrameHeader(wsFrameHeader, count);
+            var header = WsDissector.SerializeFrameHeader(wsFrameHeader, count, null);
             await WriteAsync(header.Array, header.Offset, header.Count, cancellationToken).ConfigureAwait(false);
             await WriteAsync(buffer, offset, count, cancellationToken).ConfigureAwait(false);
         }
