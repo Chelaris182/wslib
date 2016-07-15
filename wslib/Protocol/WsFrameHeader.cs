@@ -61,6 +61,10 @@ namespace wslib.Protocol
             arraySegment.Array[arraySegment.Offset + 1] = byte2;
         }
 
+        public WsFrameHeader()
+        {
+        }
+
         public WsFrameHeader(byte byte1, byte byte2)
         {
             this.byte1 = byte1;

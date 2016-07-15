@@ -38,7 +38,7 @@ namespace wslib.Protocol.Writer
         private WsFrameHeader generateFrameHeader(bool finFlag)
         {
             var opcode = messageType == MessageType.Text ? WsFrameHeader.Opcodes.TEXT : WsFrameHeader.Opcodes.BINARY;
-            return new WsFrameHeader(0, 0) { FIN = finFlag, OPCODE = opcode };
+            return new WsFrameHeader { FIN = finFlag, OPCODE = opcode };
         }
 
         public void Dispose()
