@@ -86,7 +86,7 @@ namespace wslib.Protocol
             while (IsConnected())
             {
                 var frame = await WsDissector.ReadFrameHeader(stream, serverSocket, cancellationToken).ConfigureAwait(false);
-                if (!isDataFrame(frame))
+                if (isControlFrame(frame))
                 {
                     await processControlFrame(frame, cancellationToken).ConfigureAwait(false);
                     continue;
@@ -178,9 +178,9 @@ namespace wslib.Protocol
             await SendMessage(WsFrameHeader.Opcodes.PONG, payload, cancellationToken).ConfigureAwait(false);
         }
 
-        private static bool isDataFrame(WsFrame frame)
+        private static bool isControlFrame(WsFrame frame)
         {
-            return frame.Header.OPCODE == WsFrameHeader.Opcodes.BINARY || frame.Header.OPCODE == WsFrameHeader.Opcodes.TEXT || frame.Header.OPCODE == WsFrameHeader.Opcodes.CONTINUATION;
+            return frame.Header.OPCODE >= WsFrameHeader.Opcodes.CLOSE;
         }
 
         public async Task SendMessage(WsFrameHeader.Opcodes opcode, byte[] payload, CancellationToken cancellationToken)
@@ -188,7 +188,7 @@ namespace wslib.Protocol
             await writeSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false); // TODO: timeout
             try
             {
-                var header = WsDissector.SerializeFrameHeader(new WsFrameHeader(0, 0) { FIN = true, OPCODE = opcode }, payload.Length, null);
+                var header = WsDissector.SerializeFrameHeader(new WsFrameHeader { FIN = true, OPCODE = opcode }, payload.Length, null);
                 await stream.WriteAsync(header.Array, header.Offset, header.Count, cancellationToken).ConfigureAwait(false);
                 await stream.WriteAsync(payload, 0, payload.Length, cancellationToken).ConfigureAwait(false);
             }
