@@ -2,6 +2,7 @@
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using wslib.Utils;
 
 namespace wslib.Protocol
 {
@@ -28,14 +29,19 @@ namespace wslib.Protocol
             if (r <= 0) return r;
 
             if (currentFrame.Header.MASK)
-                unmask(buffer, offset, r);
+                inplaceUnmask(buffer, offset, r);
 
             framePayloadLen -= (ulong)r;
             framePosition += (ulong)r;
             if (framePayloadLen == 0 && !currentFrame.Header.FIN)
             {
-                currentFrame = await ws.ReadFrameAsync(cancellationToken).ConfigureAwait(false); // TODO: close connection gracefully
-                if (currentFrame.Header.OPCODE != WsFrameHeader.Opcodes.CONTINUATION) throw new ProtocolViolationException();
+                currentFrame = await ws.ReadFrameAsync(cancellationToken).ConfigureAwait(false);
+                if (currentFrame.Header.OPCODE != WsFrameHeader.Opcodes.CONTINUATION)
+                {
+                    await ws.CloseAsync(CloseStatusCode.ProtocolError, cancellationToken).ConfigureAwait(false);
+                    throw new ProtocolViolationException("Fragmented message was aborted");
+                }
+
                 framePayloadLen = currentFrame.PayloadLength;
                 framePosition = 0;
             }
@@ -43,11 +49,11 @@ namespace wslib.Protocol
             return r;
         }
 
-        private void unmask(byte[] buffer, int offset, int count)
+        private void inplaceUnmask(byte[] buffer, int offset, int count)
         {
             for (var i = offset; i < offset + count; i++)
             {
-                buffer[i] = (byte)(buffer[i] ^ currentFrame.Mask[framePosition % 4]);
+                buffer[i] = (byte)(buffer[i] ^ currentFrame.Mask.At((int)(framePosition % 4)));
                 framePosition++;
             }
         }

@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
@@ -15,8 +16,9 @@ namespace UnitTests
         [TestCase(new byte[] { 0x91, 0xFF, 0x12, 0x34, 0x56, 0x78, 0x12, 0x34, 0x56, 0x78, 0x98, 0x76, 0x54, 0x32 }, (ulong)0x1234567812345678)]
         public async Task TestLengthDecodingMasked(byte[] message, ulong length)
         {
+            var receiveBuffer = new ArraySegment<byte>(new byte[100]);
             var stream = new MemoryStream(message);
-            var frame = await WsDissector.ReadFrameHeader(stream, true, CancellationToken.None);
+            var frame = await WsDissector.ReadFrameHeader(stream, receiveBuffer, true, CancellationToken.None);
             Assert.That(frame.Header.FIN, Is.True);
             Assert.That(frame.Header.MASK, Is.True);
             Assert.That(frame.PayloadLength, Is.EqualTo(length));
@@ -30,8 +32,9 @@ namespace UnitTests
         [TestCase(new byte[] { 0x91, 0x7F, 0x12, 0x34, 0x56, 0x78, 0x12, 0x34, 0x56, 0x78 }, (ulong)0x1234567812345678)]
         public async Task TestLengthDecodingWithoutMask(byte[] message, ulong length)
         {
+            var receiveBuffer = new ArraySegment<byte>(new byte[100]);
             var stream = new MemoryStream(message);
-            var frame = await WsDissector.ReadFrameHeader(stream, false, CancellationToken.None);
+            var frame = await WsDissector.ReadFrameHeader(stream, receiveBuffer, false, CancellationToken.None);
             Assert.That(frame.Header.FIN, Is.True);
             Assert.That(frame.Header.MASK, Is.False);
             Assert.That(frame.PayloadLength, Is.EqualTo(length));
@@ -41,8 +44,9 @@ namespace UnitTests
         [TestCase(new byte[] { 0x91, 0x83, 0x00, 0x00 })]
         public void TestInsufficientData(byte[] message)
         {
+            var receiveBuffer = new ArraySegment<byte>(new byte[100]);
             var stream = new MemoryStream(message);
-            Assert.ThrowsAsync<IOException>(() => WsDissector.ReadFrameHeader(stream, true, CancellationToken.None));
+            Assert.ThrowsAsync<IOException>(() => WsDissector.ReadFrameHeader(stream, receiveBuffer, true, CancellationToken.None));
         }
     }
 }

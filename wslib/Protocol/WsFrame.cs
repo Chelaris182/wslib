@@ -1,12 +1,14 @@
-﻿namespace wslib.Protocol
+﻿using System;
+
+namespace wslib.Protocol
 {
-    public class WsFrame
+    public struct WsFrame
     {
         public readonly WsFrameHeader Header;
         public readonly ulong PayloadLength;
-        public readonly byte[] Mask;
+        public readonly ArraySegment<byte> Mask;
 
-        public WsFrame(WsFrameHeader header, ulong payloadLength, byte[] mask)
+        public WsFrame(WsFrameHeader header, ulong payloadLength, ArraySegment<byte> mask)
         {
             Header = header;
             PayloadLength = payloadLength;

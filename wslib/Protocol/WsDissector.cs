@@ -9,43 +9,38 @@ namespace wslib.Protocol
 {
     public static class WsDissector
     {
-        public static async Task<WsFrame> ReadFrameHeader(Stream stream, bool expectMask, CancellationToken cancellationToken)
+        public static async Task<WsFrame> ReadFrameHeader(Stream stream, ArraySegment<byte> receiveBuffer, bool expectMask, CancellationToken cancellationToken)
         {
-            var buf = new byte[14];
-            var headerLength = expectMask ? 6 : 2;
-            await stream.ReadUntil(buf, 0, headerLength, cancellationToken).ConfigureAwait(false);
+            if (receiveBuffer.Count < 14)
+                throw new ArgumentException("receive buffer is too small");
 
-            bool actualMask = (buf[1] > 127);
+            var headerLength = expectMask ? 6 : 2;
+            await stream.ReadUntil(receiveBuffer, 0, headerLength, cancellationToken).ConfigureAwait(false);
+
+            bool actualMask = (receiveBuffer.At(1) > 127);
             if (expectMask ^ actualMask)
                 throw new ProtocolViolationException("mask flag has wrong value");
 
             int maskOffset = 2;
-            ulong payloadLength = (ulong)(buf[1] & 0x7F);
+            ulong payloadLength = (ulong)(receiveBuffer.At(1) & 0x7F);
             if (payloadLength > 125)
             {
                 if (payloadLength == 126)
                 {
-                    await stream.ReadUntil(buf, headerLength, headerLength + 2, cancellationToken).ConfigureAwait(false);
-                    payloadLength = StreamExtensions.ReadN(buf, 2, 2);
+                    await stream.ReadUntil(receiveBuffer, headerLength, headerLength + 2, cancellationToken).ConfigureAwait(false);
+                    payloadLength = StreamExtensions.ReadN(receiveBuffer, 2, 2);
                     maskOffset = 4;
                 }
                 else if (payloadLength == 127)
                 {
-                    await stream.ReadUntil(buf, headerLength, headerLength + 8, cancellationToken).ConfigureAwait(false);
-                    payloadLength = StreamExtensions.ReadN(buf, 2, 8);
+                    await stream.ReadUntil(receiveBuffer, headerLength, headerLength + 8, cancellationToken).ConfigureAwait(false);
+                    payloadLength = StreamExtensions.ReadN(receiveBuffer, 2, 8);
                     maskOffset = 10;
                 }
             }
 
-            byte[] mask = null; // TODO: replace with array segment
-            if (actualMask)
-            {
-                mask = new byte[4];
-                Buffer.BlockCopy(buf, maskOffset, mask, 0, 4);
-            }
-
-            var header = new WsFrameHeader(buf[0], buf[1]);
-            var frame = new WsFrame(header, payloadLength, mask);
+            var header = new WsFrameHeader(receiveBuffer.At(0), receiveBuffer.At(1));
+            var frame = new WsFrame(header, payloadLength, new ArraySegment<byte>(receiveBuffer.Array, receiveBuffer.Offset + maskOffset, 4));
             return frame;
         }
 

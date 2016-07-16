@@ -6,18 +6,20 @@ namespace wslib.Protocol
 {
     internal class Heartbit
     {
+        private static readonly ArraySegment<byte> pingPayload = new ArraySegment<byte>(new byte[] { 0x00 });
+
         public static async Task RunHeartbit(WebSocket socket)
         {
             while (socket.IsConnected())
             {
                 var now = DateTime.Now;
-                if (socket.LastActivity.Add(TimeSpan.FromSeconds(10)) < now)
+                if (socket.LastActivity.Add(TimeSpan.FromSeconds(10)) < now) // TODO: make timeout configurable
                 {
                     await socket.CloseAsync(CloseStatusCode.ProtocolError, CancellationToken.None).ConfigureAwait(false);
                     return;
                 }
 
-                var pingTime = socket.LastActivity.Add(TimeSpan.FromSeconds(5));
+                var pingTime = socket.LastActivity.Add(TimeSpan.FromSeconds(5)); // TODO: make timeout configurable
                 var toSleep = pingTime - now;
                 if (pingTime < now)
                 {
@@ -29,9 +31,12 @@ namespace wslib.Protocol
             }
         }
 
-        private static Task sendPing(WebSocket socket)
+        private static async Task sendPing(WebSocket socket)
         {
-            return socket.SendMessage(WsFrameHeader.Opcodes.PING, new byte[] { 0x00 }, CancellationToken.None);
+            using (var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(1)))
+            {
+                await socket.SendMessage(WsFrameHeader.Opcodes.PING, pingPayload, tokenSource.Token).ConfigureAwait(false);
+            }
         }
     }
 }

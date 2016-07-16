@@ -13,15 +13,17 @@ namespace wslib.Protocol
 {
     public class WebSocket : IWebSocket
     {
-        public bool IsConnected() => stream.CanRead;
-        public Dictionary<string, object> Env;
-
+        public readonly Dictionary<string, object> Env;
         private readonly Stream stream;
         private readonly List<IMessageExtension> extensions;
         private readonly bool serverSocket;
         private readonly SemaphoreSlim writeSemaphore = new SemaphoreSlim(1, 1);
+        private readonly ArraySegment<byte> headerBuffer;
+        private readonly ArraySegment<byte> payloadBuffer;
+
         private int isClosing;
         internal DateTime LastActivity = DateTime.Now;
+        public bool IsConnected() => stream.CanRead;
 
         public WebSocket(Dictionary<string, object> env, Stream stream, List<IMessageExtension> extensions, bool serverSocket)
         {
@@ -29,6 +31,9 @@ namespace wslib.Protocol
             this.stream = stream;
             this.extensions = extensions;
             this.serverSocket = serverSocket;
+            var receiveBuffer = new byte[128];
+            headerBuffer = new ArraySegment<byte>(receiveBuffer, 0, 14);
+            payloadBuffer = new ArraySegment<byte>(receiveBuffer, 14, receiveBuffer.Length - 14);
         }
 
         private void refreshActivity()
@@ -47,10 +52,20 @@ namespace wslib.Protocol
             try
             {
                 WsFrame frame = await ReadFrameAsync(cancellationToken).ConfigureAwait(false);
-                if (frame == null) return null;
 
-                if (frame.Header.OPCODE == WsFrameHeader.Opcodes.CONTINUATION) throw new ProtocolViolationException("unexpected frame type: " + frame.Header.OPCODE);
-                var messageType = frame.Header.OPCODE == WsFrameHeader.Opcodes.TEXT ? MessageType.Text : MessageType.Binary;
+                MessageType messageType;
+                switch (frame.Header.OPCODE)
+                {
+                    case WsFrameHeader.Opcodes.TEXT:
+                        messageType = MessageType.Text;
+                        break;
+                    case WsFrameHeader.Opcodes.BINARY:
+                        messageType = MessageType.Binary;
+                        break;
+                    default:
+                        throw new ProtocolViolationException("unexpected frame type: " + frame.Header.OPCODE);
+                }
+
                 var wsMesageReadStream = new WsMesageReader(this, frame);
                 Stream payloadStream = new WsReadStream(wsMesageReadStream);
                 if (extensions != null)
@@ -83,9 +98,10 @@ namespace wslib.Protocol
 
         internal async Task<WsFrame> ReadFrameAsync(CancellationToken cancellationToken)
         {
-            while (IsConnected())
+            while (true)
             {
-                var frame = await WsDissector.ReadFrameHeader(stream, serverSocket, cancellationToken).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                var frame = await WsDissector.ReadFrameHeader(stream, headerBuffer, serverSocket, cancellationToken).ConfigureAwait(false);
                 if (isControlFrame(frame))
                 {
                     await processControlFrame(frame, cancellationToken).ConfigureAwait(false);
@@ -94,8 +110,6 @@ namespace wslib.Protocol
 
                 return frame;
             }
-
-            return null;
         }
 
         internal async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
@@ -115,7 +129,7 @@ namespace wslib.Protocol
 
         private async Task processControlFrame(WsFrame frame, CancellationToken cancellationToken)
         {
-            if (frame.PayloadLength > 1024)
+            if (frame.PayloadLength > (ulong)payloadBuffer.Count)
             {
                 await CloseAsync(CloseStatusCode.MessageTooLarge, cancellationToken).ConfigureAwait(false);
                 throw new ProtocolViolationException("control frame is too large");
@@ -128,13 +142,14 @@ namespace wslib.Protocol
                 throw new ProtocolViolationException("multi-frame control frames aren't supported");
             }
 
-            byte[] payload = new byte[frame.PayloadLength];
-            await stream.ReadUntil(payload, 0, payload.Length, cancellationToken).ConfigureAwait(false);
+            int payloadLen = (int)frame.PayloadLength;
+            await stream.ReadUntil(payloadBuffer, 0, payloadLen, cancellationToken).ConfigureAwait(false);
+            var payload = new ArraySegment<byte>(payloadBuffer.Array, payloadBuffer.Offset, payloadLen);
 
             switch (frame.Header.OPCODE)
             {
                 case WsFrameHeader.Opcodes.CLOSE:
-                    if (payload.Length >= 2)
+                    if (payloadLen >= 2)
                         await closeAsync(payload, cancellationToken).ConfigureAwait(false);
                     else
                         await CloseAsync(CloseStatusCode.NormalClosure, cancellationToken).ConfigureAwait(false);
@@ -156,16 +171,17 @@ namespace wslib.Protocol
         public Task CloseAsync(CloseStatusCode statusCode, CancellationToken cancellationToken)
         {
             var s = (short)statusCode;
-            return closeAsync(new[] { (byte)(s >> 8), (byte)(s & 0xff) }, cancellationToken);
+            var payload = new ArraySegment<byte>(new[] { (byte)(s >> 8), (byte)(s & 0xff) });
+            return closeAsync(payload, cancellationToken);
         }
 
-        private async Task closeAsync(byte[] closeCode, CancellationToken cancellationToken)
+        private async Task closeAsync(ArraySegment<byte> payload, CancellationToken cancellationToken)
         {
             if (Interlocked.CompareExchange(ref isClosing, 1, 0) != 0) return;
 
             try
             {
-                await SendMessage(WsFrameHeader.Opcodes.CLOSE, closeCode, cancellationToken).ConfigureAwait(false);
+                await SendMessage(WsFrameHeader.Opcodes.CLOSE, payload, cancellationToken).ConfigureAwait(false);
             }
             finally
             {
@@ -173,9 +189,9 @@ namespace wslib.Protocol
             }
         }
 
-        private async Task sendPong(byte[] payload, CancellationToken cancellationToken)
+        private Task sendPong(ArraySegment<byte> payload, CancellationToken cancellationToken)
         {
-            await SendMessage(WsFrameHeader.Opcodes.PONG, payload, cancellationToken).ConfigureAwait(false);
+            return SendMessage(WsFrameHeader.Opcodes.PONG, payload, cancellationToken);
         }
 
         private static bool isControlFrame(WsFrame frame)
@@ -183,14 +199,14 @@ namespace wslib.Protocol
             return frame.Header.OPCODE >= WsFrameHeader.Opcodes.CLOSE;
         }
 
-        public async Task SendMessage(WsFrameHeader.Opcodes opcode, byte[] payload, CancellationToken cancellationToken)
+        public async Task SendMessage(WsFrameHeader.Opcodes opcode, ArraySegment<byte> payload, CancellationToken cancellationToken)
         {
-            await writeSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false); // TODO: timeout
+            await writeSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                var header = WsDissector.SerializeFrameHeader(new WsFrameHeader { FIN = true, OPCODE = opcode }, payload.Length, null);
-                await stream.WriteAsync(header.Array, header.Offset, header.Count, cancellationToken).ConfigureAwait(false);
-                await stream.WriteAsync(payload, 0, payload.Length, cancellationToken).ConfigureAwait(false);
+                var header = WsDissector.SerializeFrameHeader(new WsFrameHeader { FIN = true, OPCODE = opcode }, payload.Count, null);
+                await stream.WriteAsync(header, cancellationToken).ConfigureAwait(false);
+                await stream.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
             }
             finally
             {
