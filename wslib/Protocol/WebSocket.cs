@@ -20,10 +20,15 @@ namespace wslib.Protocol
         private readonly SemaphoreSlim writeSemaphore = new SemaphoreSlim(1, 1);
         private readonly ArraySegment<byte> headerBuffer;
         private readonly ArraySegment<byte> payloadBuffer;
-
+        private DateTime lastActivity = DateTime.Now;
         private int isClosing;
-        internal DateTime LastActivity = DateTime.Now;
+
         public bool IsConnected() => stream.CanRead;
+
+        public DateTime LastActivity()
+        {
+            return lastActivity;
+        }
 
         public WebSocket(Dictionary<string, object> env, Stream stream, List<IMessageExtension> extensions, bool serverSocket)
         {
@@ -34,11 +39,6 @@ namespace wslib.Protocol
             var receiveBuffer = new byte[128];
             headerBuffer = new ArraySegment<byte>(receiveBuffer, 0, 14);
             payloadBuffer = new ArraySegment<byte>(receiveBuffer, 14, receiveBuffer.Length - 14);
-        }
-
-        private void refreshActivity()
-        {
-            LastActivity = DateTime.Now;
         }
 
         public void Dispose()
@@ -115,7 +115,7 @@ namespace wslib.Protocol
         internal async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
             var r = await stream.ReadAsync(buffer, offset, count, cancellationToken).ConfigureAwait(false);
-            if (r > 0) refreshActivity();
+            if (r > 0) lastActivity = DateTime.Now;
             return r;
         }
 
@@ -181,7 +181,7 @@ namespace wslib.Protocol
 
             try
             {
-                await SendMessage(WsFrameHeader.Opcodes.CLOSE, payload, cancellationToken).ConfigureAwait(false);
+                await SendMessageAsync(WsFrameHeader.Opcodes.CLOSE, payload, cancellationToken).ConfigureAwait(false);
             }
             finally
             {
@@ -191,7 +191,7 @@ namespace wslib.Protocol
 
         private Task sendPong(ArraySegment<byte> payload, CancellationToken cancellationToken)
         {
-            return SendMessage(WsFrameHeader.Opcodes.PONG, payload, cancellationToken);
+            return SendMessageAsync(WsFrameHeader.Opcodes.PONG, payload, cancellationToken);
         }
 
         private static bool isControlFrame(WsFrame frame)
@@ -199,7 +199,7 @@ namespace wslib.Protocol
             return frame.Header.OPCODE >= WsFrameHeader.Opcodes.CLOSE;
         }
 
-        public async Task SendMessage(WsFrameHeader.Opcodes opcode, ArraySegment<byte> payload, CancellationToken cancellationToken)
+        public async Task SendMessageAsync(WsFrameHeader.Opcodes opcode, ArraySegment<byte> payload, CancellationToken cancellationToken)
         {
             await writeSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             try

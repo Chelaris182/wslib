@@ -64,6 +64,7 @@
     <Compile Include="FrameDissectorTests.cs" />
     <Compile Include="FrameHeaderTest.cs" />
     <Compile Include="HandshakeTests.cs" />
+    <Compile Include="HeartbitTests.cs" />
     <Compile Include="HttpComposerTest.cs" />
     <Compile Include="HttpParserTest.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

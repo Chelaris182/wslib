@@ -4,38 +4,38 @@ using System.Threading.Tasks;
 
 namespace wslib.Protocol
 {
-    internal class Heartbit
+    public static class Heartbit
     {
         private static readonly ArraySegment<byte> pingPayload = new ArraySegment<byte>(new byte[] { 0x00 });
 
-        public static async Task RunHeartbit(WebSocket socket)
+        public static async Task RunHeartbit(IWebSocket socket, TimeSpan pingPeriod, TimeSpan inactivityPeriod)
         {
             while (socket.IsConnected())
             {
                 var now = DateTime.Now;
-                if (socket.LastActivity.Add(TimeSpan.FromSeconds(10)) < now) // TODO: make timeout configurable
+                if (socket.LastActivity().Add(inactivityPeriod) < now)
                 {
                     await socket.CloseAsync(CloseStatusCode.ProtocolError, CancellationToken.None).ConfigureAwait(false);
                     return;
                 }
 
-                var pingTime = socket.LastActivity.Add(TimeSpan.FromSeconds(5)); // TODO: make timeout configurable
+                var pingTime = socket.LastActivity().Add(pingPeriod);
                 var toSleep = pingTime - now;
                 if (pingTime < now)
                 {
                     await sendPing(socket).ConfigureAwait(false);
-                    toSleep = TimeSpan.FromSeconds(5);
+                    toSleep = pingPeriod;
                 }
 
                 await Task.Delay(toSleep).ConfigureAwait(false);
             }
         }
 
-        private static async Task sendPing(WebSocket socket)
+        private static async Task sendPing(IWebSocket socket)
         {
             using (var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(1)))
             {
-                await socket.SendMessage(WsFrameHeader.Opcodes.PING, pingPayload, tokenSource.Token).ConfigureAwait(false);
+                await socket.SendMessageAsync(WsFrameHeader.Opcodes.PING, pingPayload, tokenSource.Token).ConfigureAwait(false);
             }
         }
     }

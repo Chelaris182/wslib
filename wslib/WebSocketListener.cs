@@ -11,6 +11,9 @@ namespace wslib
 {
     public class WebSocketListener : IDisposable
     {
+        private static readonly TimeSpan defaultPingPeriod = TimeSpan.FromSeconds(5);
+        private static readonly TimeSpan defaultInactivityTimeout = TimeSpan.FromSeconds(10);
+
         private readonly WebSocketListenerOptions options;
         private readonly Func<IWebSocket, Task> appFunc;
         private readonly TcpListener listener;
@@ -74,7 +77,7 @@ namespace wslib
         {
             using (WebSocket ws = await negotiator.Negotiate(stream).ConfigureAwait(false))
             {
-                Heartbit.RunHeartbit(ws); // fire&forget // TODO: log errors
+                Heartbit.RunHeartbit(ws, defaultPingPeriod, defaultInactivityTimeout); // fire&forget // TODO: log errors
                 await appFunc(ws).ConfigureAwait(false);
             }
         }
