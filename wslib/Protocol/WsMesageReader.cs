@@ -51,10 +51,11 @@ namespace wslib.Protocol
 
         private void inplaceUnmask(byte[] buffer, int offset, int count)
         {
+            var p = framePosition;
             for (var i = offset; i < offset + count; i++)
             {
-                buffer[i] = (byte)(buffer[i] ^ currentFrame.Mask.At((int)(framePosition % 4)));
-                framePosition++;
+                buffer[i] = (byte)(buffer[i] ^ currentFrame.Mask.At((int)(p % 4)));
+                p++;
             }
         }
     }
