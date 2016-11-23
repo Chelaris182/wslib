@@ -132,12 +132,6 @@ namespace wslib.Protocol
 
         private async Task processControlFrame(WsFrame frame, CancellationToken cancellationToken)
         {
-            if (frame.PayloadLength > (ulong)payloadBuffer.Count)
-            {
-                await CloseAsync(CloseStatusCode.MessageTooLarge, cancellationToken).ConfigureAwait(false);
-                throw new ProtocolViolationException("control frame is too large");
-            }
-
             if (!frame.Header.FIN)
             {
                 // current code doesn't support multi-frame control messages
@@ -145,14 +139,16 @@ namespace wslib.Protocol
                 throw new ProtocolViolationException("multi-frame control frames aren't supported");
             }
 
-            int payloadLen = (int)frame.PayloadLength;
-            await stream.ReadUntil(payloadBuffer, 0, payloadLen, cancellationToken).ConfigureAwait(false);
-            var payload = new ArraySegment<byte>(payloadBuffer.Array, payloadBuffer.Offset, payloadLen);
+            var wsMesageReadStream = new WsMesageReader(this, frame);
+            Stream payloadStream = new WsReadStream(wsMesageReadStream);
+            var array = new byte[frame.PayloadLength];
+            var payload = new ArraySegment<byte>(array);
+            await payloadStream.ReadUntil(payload, 0, (int)frame.PayloadLength, cancellationToken);
 
             switch (frame.Header.OPCODE)
             {
                 case WsFrameHeader.Opcodes.CLOSE:
-                    if (payloadLen >= 2)
+                    if (payload.Count >= 2)
                         await closeAsync(payload, cancellationToken).ConfigureAwait(false);
                     else
                         await CloseAsync(CloseStatusCode.NormalClosure, cancellationToken).ConfigureAwait(false);
@@ -209,7 +205,7 @@ namespace wslib.Protocol
             {
                 var header = WsDissector.SerializeFrameHeader(new WsFrameHeader { FIN = true, OPCODE = opcode }, payload.Count, null);
                 await stream.WriteAsync(header, cancellationToken).ConfigureAwait(false);
-                await stream.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
+                if (payload.Count > 0) await stream.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
             }
             finally
             {
