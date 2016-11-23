@@ -123,7 +123,10 @@ namespace wslib.Protocol
         {
             await writeSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             IWsMessageWriteStream s = new WsWireStream(stream);
-            s = extensions.Aggregate(s, (current, extension) => extension.ApplyWrite(current));
+            if (extensions != null)
+            {
+                s = extensions.Aggregate(s, (current, extension) => extension.ApplyWrite(current));
+            }
             return new WsMessageWriter(type, () => writeSemaphore.Release(), s); // TODO replace action with disposable object
         }
 
