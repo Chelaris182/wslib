@@ -20,10 +20,10 @@ namespace UnitTests
         {
             using (var source = new MemoryStream())
             {
-                var randomString = RandomGeneration.RandomString(1, 4096);
+                var randomString = RandomGeneration.RandomString(1, 65536 * 4);
                 var payload1 = Encoding.UTF8.GetBytes(randomString);
 
-                randomString = RandomGeneration.RandomString(1, 4096);
+                randomString = RandomGeneration.RandomString(1, 65536 * 4);
                 var payload2 = Encoding.UTF8.GetBytes(randomString);
                 using (var writer = new WsMessageWriter(MessageType.Text, () => { }, new WsWireStream(source)))
                 {
