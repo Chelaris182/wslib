@@ -57,7 +57,7 @@ namespace wslib.Protocol
             {
                 header[1] |= (byte)payloadLen;
             }
-            else if (payloadLen < ushort.MaxValue)
+            else if (payloadLen <= ushort.MaxValue)
             {
                 headerLen += 2;
                 header[1] |= 126;
@@ -68,7 +68,13 @@ namespace wslib.Protocol
             {
                 headerLen += 8;
                 header[1] |= 127;
-                throw new NotImplementedException(); // TODO: fix serialization
+                int i = 0;
+                while (payloadLen > 0)
+                {
+                    header[9 - i] = (byte)(payloadLen & 0xff);
+                    payloadLen = payloadLen >> 8;
+                    i++;
+                }
             }
 
             if (wsFrameHeader.MASK)
