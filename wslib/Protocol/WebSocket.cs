@@ -36,7 +36,7 @@ namespace wslib.Protocol
             this.stream = stream;
             this.extensions = extensions;
             this.serverSocket = serverSocket;
-            var receiveBuffer = new byte[128];
+            var receiveBuffer = new byte[14 + 125];
             headerBuffer = new ArraySegment<byte>(receiveBuffer, 0, 14);
             payloadBuffer = new ArraySegment<byte>(receiveBuffer, 14, receiveBuffer.Length - 14);
         }
@@ -132,6 +132,13 @@ namespace wslib.Protocol
 
         private async Task processControlFrame(WsFrame frame, CancellationToken cancellationToken)
         {
+            if (frame.PayloadLength > (ulong)payloadBuffer.Count)
+            {
+                // control frames are only allowed to have payload up to and including 125 octets
+                await CloseAsync(CloseStatusCode.ProtocolError, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
             if (!frame.Header.FIN)
             {
                 // current code doesn't support multi-frame control messages
@@ -141,9 +148,8 @@ namespace wslib.Protocol
 
             var wsMesageReadStream = new WsMesageReader(this, frame);
             Stream payloadStream = new WsReadStream(wsMesageReadStream);
-            var array = new byte[frame.PayloadLength];
-            var payload = new ArraySegment<byte>(array);
-            await payloadStream.ReadUntil(payload, 0, (int)frame.PayloadLength, cancellationToken);
+            await payloadStream.ReadUntil(payloadBuffer, 0, (int)frame.PayloadLength, cancellationToken);
+            var payload = new ArraySegment<byte>(payloadBuffer.Array, payloadBuffer.Offset, (int)frame.PayloadLength);
 
             switch (frame.Header.OPCODE)
             {
