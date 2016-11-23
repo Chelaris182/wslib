@@ -22,29 +22,41 @@ namespace wslib.Protocol
 
         public async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
-            int toRead = (int)Math.Min(framePayloadLen, (ulong)count);
-            if (toRead == 0) return 0;
+            if (count == 0) return 0;
 
-            var r = await ws.ReadAsync(buffer, offset, toRead, cancellationToken).ConfigureAwait(false);
-            if (r <= 0) return r;
-
-            if (currentFrame.Header.MASK)
-                inplaceUnmask(buffer, offset, r);
-
-            framePayloadLen -= (ulong)r;
-            framePosition += (ulong)r;
-            if (framePayloadLen == 0 && !currentFrame.Header.FIN)
+            int r = 0;
+            do
             {
-                currentFrame = await ws.ReadFrameAsync(cancellationToken).ConfigureAwait(false);
-                if (currentFrame.Header.OPCODE != WsFrameHeader.Opcodes.CONTINUATION)
+                if (framePayloadLen > 0)
                 {
-                    await ws.CloseAsync(CloseStatusCode.ProtocolError, cancellationToken).ConfigureAwait(false);
-                    throw new ProtocolViolationException("Fragmented message was aborted");
+                    int toRead = (int)Math.Min(framePayloadLen, (ulong)count);
+                    r = await ws.ReadAsync(buffer, offset, toRead, cancellationToken).ConfigureAwait(false);
+                    if (r <= 0) return r;
+
+                    if (currentFrame.Header.MASK)
+                        inplaceUnmask(buffer, offset, r);
+
+                    framePayloadLen -= (ulong)r;
+                    framePosition += (ulong)r;
                 }
 
-                framePayloadLen = currentFrame.PayloadLength;
-                framePosition = 0;
-            }
+                if (framePayloadLen == 0)
+                {
+                    // if this is the last frame of the message, return
+                    if (currentFrame.Header.FIN) return r;
+
+                    // read the next frame
+                    currentFrame = await ws.ReadFrameAsync(cancellationToken).ConfigureAwait(false);
+                    if (currentFrame.Header.OPCODE != WsFrameHeader.Opcodes.CONTINUATION)
+                    {
+                        await ws.CloseAsync(CloseStatusCode.ProtocolError, cancellationToken).ConfigureAwait(false);
+                        throw new ProtocolViolationException("Fragmented message was aborted");
+                    }
+
+                    framePayloadLen = currentFrame.PayloadLength;
+                    framePosition = 0;
+                }
+            } while (r == 0); // spin until we find a non-empty frame or EOM
 
             return r;
         }
