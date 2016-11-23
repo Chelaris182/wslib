@@ -1,11 +1,9 @@
 ﻿using System;
 using System.IO;
 using System.Net;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using wslib;
-using wslib.Protocol;
 
 namespace LocalServer
 {
@@ -25,7 +23,7 @@ namespace LocalServer
 
         private static void LogUnobservedTaskException(object sender, UnobservedTaskExceptionEventArgs unobservedTaskExceptionEventArgs)
         {
-            throw new NotImplementedException(); // TODO: log
+            //Console.WriteLine(unobservedTaskExceptionEventArgs.Exception);
         }
 
         private static async Task appFunc(IWebSocket webSocket)
@@ -34,17 +32,15 @@ namespace LocalServer
             {
                 using (var msg = await webSocket.ReadMessageAsync(CancellationToken.None))
                 {
-                    if (msg != null)
-                    {
-                        using (var ms = new MemoryStream())
-                        {
-                            await msg.ReadStream.CopyToAsync(ms);
-                            var text = Encoding.UTF8.GetString(ms.ToArray());
+                    if (msg == null) continue;
 
-                            using (var w = await webSocket.CreateMessageWriter(MessageType.Text, CancellationToken.None))
-                            {
-                                await w.WriteMessageAsync(ms.ToArray(), 0, (int)ms.Length, CancellationToken.None);
-                            }
+                    using (var ms = new MemoryStream())
+                    {
+                        await msg.ReadStream.CopyToAsync(ms);
+                        byte[] array = ms.ToArray();
+                        using (var w = await webSocket.CreateMessageWriter(msg.Type, CancellationToken.None))
+                        {
+                            await w.WriteMessageAsync(array, 0, array.Length, CancellationToken.None);
                         }
                     }
                 }
