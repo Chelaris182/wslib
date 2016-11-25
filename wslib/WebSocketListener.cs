@@ -11,6 +11,9 @@ namespace wslib
 {
     public class WebSocketListener : IDisposable
     {
+        private static readonly TimeSpan defaultPingPeriod = TimeSpan.FromSeconds(5);
+        private static readonly TimeSpan defaultInactivityTimeout = TimeSpan.FromSeconds(10);
+
         private readonly WebSocketListenerOptions options;
         private readonly Func<IWebSocket, Task> appFunc;
         private readonly TcpListener listener;
