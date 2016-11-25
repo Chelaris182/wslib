@@ -13,6 +13,9 @@ namespace wslib.Protocol
 {
     public class WebSocket : IWebSocket
     {
+        private const int maxControlPayload = 125;
+        private const int maxFrameHeaderLength = 14;
+
         public readonly Dictionary<string, object> Env;
         private readonly Stream stream;
         private readonly List<IMessageExtension> extensions;
@@ -22,8 +25,19 @@ namespace wslib.Protocol
         private readonly ArraySegment<byte> payloadBuffer;
         private DateTime lastActivity = DateTime.Now;
         private int isClosing;
+        private bool isClosed;
+        private int state = (int)State.OPENED;
 
-        public bool IsConnected() => stream.CanRead;
+        private enum State
+        {
+            OPENED,
+            CLOSE_RECEIVED,
+            SENDING_CLOSE,
+            CLOSE_SENT,
+            CLOSED
+        }
+
+        public bool IsConnected() => stream.CanRead && stream.CanWrite && !isClosed;
 
         public DateTime LastActivity()
         {
@@ -36,9 +50,9 @@ namespace wslib.Protocol
             this.stream = stream;
             this.extensions = extensions;
             this.serverSocket = serverSocket;
-            var receiveBuffer = new byte[14 + 125];
-            headerBuffer = new ArraySegment<byte>(receiveBuffer, 0, 14);
-            payloadBuffer = new ArraySegment<byte>(receiveBuffer, 14, receiveBuffer.Length - 14);
+            var receiveBuffer = new byte[maxFrameHeaderLength + maxControlPayload];
+            headerBuffer = new ArraySegment<byte>(receiveBuffer, 0, maxFrameHeaderLength);
+            payloadBuffer = new ArraySegment<byte>(receiveBuffer, maxFrameHeaderLength, receiveBuffer.Length - maxFrameHeaderLength);
         }
 
         public void Dispose()
@@ -77,7 +91,8 @@ namespace wslib.Protocol
             }
             catch (IOException e) // happens when read or write returns error
             {
-                // TODO: log?
+                Console.WriteLine(e);
+                isClosed = true;
             }
             catch (ProtocolViolationException e)
             {
@@ -91,6 +106,7 @@ namespace wslib.Protocol
             catch (InvalidOperationException e) // happens when read or write happens on a closed socket
             {
                 // TODO: log?
+                isClosed = true;
             }
 
             return null;
@@ -132,9 +148,8 @@ namespace wslib.Protocol
 
         private async Task processControlFrame(WsFrame frame, CancellationToken cancellationToken)
         {
-            if (frame.PayloadLength > (ulong)payloadBuffer.Count)
+            if (frame.PayloadLength > maxControlPayload)
             {
-                // control frames are only allowed to have payload up to and including 125 octets
                 await CloseAsync(CloseStatusCode.ProtocolError, cancellationToken).ConfigureAwait(false);
                 return;
             }
@@ -148,16 +163,13 @@ namespace wslib.Protocol
 
             var wsMesageReadStream = new WsMesageReader(this, frame);
             Stream payloadStream = new WsReadStream(wsMesageReadStream);
-            await payloadStream.ReadUntil(payloadBuffer, 0, (int)frame.PayloadLength, cancellationToken);
+            await payloadStream.ReadUntil(payloadBuffer, 0, (int)frame.PayloadLength, cancellationToken).ConfigureAwait(false);
             var payload = new ArraySegment<byte>(payloadBuffer.Array, payloadBuffer.Offset, (int)frame.PayloadLength);
 
             switch (frame.Header.OPCODE)
             {
                 case WsFrameHeader.Opcodes.CLOSE:
-                    if (payload.Count >= 2)
-                        await closeAsync(payload, cancellationToken).ConfigureAwait(false);
-                    else
-                        await CloseAsync(CloseStatusCode.NormalClosure, cancellationToken).ConfigureAwait(false);
+                    await handleCloseMessage(cancellationToken, payload).ConfigureAwait(false);
                     return;
 
                 case WsFrameHeader.Opcodes.PING:
@@ -173,24 +185,70 @@ namespace wslib.Protocol
             }
         }
 
-        public Task CloseAsync(CloseStatusCode statusCode, CancellationToken cancellationToken)
+        private async Task handleCloseMessage(CancellationToken cancellationToken, ArraySegment<byte> payload)
         {
-            var s = (short)statusCode;
-            var payload = new ArraySegment<byte>(new[] { (byte)(s >> 8), (byte)(s & 0xff) });
-            return closeAsync(payload, cancellationToken);
-        }
-
-        private async Task closeAsync(ArraySegment<byte> payload, CancellationToken cancellationToken)
-        {
-            if (Interlocked.CompareExchange(ref isClosing, 1, 0) != 0) return;
+            var c = state;
+            while (true)
+            {
+                if (c >= (int)State.CLOSE_RECEIVED) return;
+                if (Interlocked.CompareExchange(ref state, (int)State.CLOSE_RECEIVED, c) == c) break;
+            }
 
             try
             {
-                await SendMessageAsync(WsFrameHeader.Opcodes.CLOSE, payload, cancellationToken).ConfigureAwait(false);
+                if (payload.Count >= 2)
+                    await sendCloseFrameAsync(payload, cancellationToken).ConfigureAwait(false);
+                else if (payload.Count == 1)
+                    await CloseAsync(CloseStatusCode.ProtocolError, cancellationToken).ConfigureAwait(false);
+                else
+                    await CloseAsync(CloseStatusCode.NormalClosure, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                await cleanClose().ConfigureAwait(false);
+            }
+        }
+
+        private async Task cleanClose()
+        {
+            state = (int)State.CLOSED;
+            try
+            {
+                await stream.FlushAsync().ConfigureAwait(false);
             }
             finally
             {
                 stream.Close();
+            }
+        }
+
+        /// <summary> Close websocket (send close frame, then receive until we get a close response message) </summary>
+        /// <param name="statusCode">Close status to send</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        public Task CloseAsync(CloseStatusCode statusCode, CancellationToken cancellationToken)
+        {
+            var s = (short)statusCode;
+            var array = new[] { (byte)(s >> 8), (byte)(s & 0xff) };
+            var payload = new ArraySegment<byte>(array);
+            return sendCloseFrameAsync(payload, cancellationToken);
+        }
+
+        private async Task sendCloseFrameAsync(ArraySegment<byte> payload, CancellationToken cancellationToken)
+        {
+            var c = state;
+            while (true)
+            {
+                if (c >= (int)State.SENDING_CLOSE) return;
+                if (Interlocked.CompareExchange(ref state, (int)State.SENDING_CLOSE, c) == c) break;
+            }
+
+            await SendMessageAsync(WsFrameHeader.Opcodes.CLOSE, payload, cancellationToken).ConfigureAwait(false);
+
+            c = state;
+            while (true)
+            {
+                if (c >= (int)State.CLOSE_SENT) return;
+                if (Interlocked.CompareExchange(ref state, (int)State.CLOSE_SENT, c) == c) break;
             }
         }
 
@@ -204,11 +262,18 @@ namespace wslib.Protocol
             return frame.Header.OPCODE >= WsFrameHeader.Opcodes.CLOSE;
         }
 
+        /// <summary>
+        /// </summary>
+        /// <param name="opcode"></param>
+        /// <param name="payload"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
         public async Task SendMessageAsync(WsFrameHeader.Opcodes opcode, ArraySegment<byte> payload, CancellationToken cancellationToken)
         {
             await writeSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
+                // TODO: write data to a "send buffer" first
                 var header = WsDissector.SerializeFrameHeader(new WsFrameHeader { FIN = true, OPCODE = opcode }, payload.Count, null);
                 await stream.WriteAsync(header, cancellationToken).ConfigureAwait(false);
                 if (payload.Count > 0) await stream.WriteAsync(payload, cancellationToken).ConfigureAwait(false);

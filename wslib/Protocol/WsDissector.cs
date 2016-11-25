@@ -23,20 +23,17 @@ namespace wslib.Protocol
 
             int maskOffset = 2;
             ulong payloadLength = (ulong)(receiveBuffer.At(1) & 0x7F);
-            if (payloadLength > 125)
+            if (payloadLength == 126)
             {
-                if (payloadLength == 126)
-                {
-                    await stream.ReadUntil(receiveBuffer, headerLength, headerLength + 2, cancellationToken).ConfigureAwait(false);
-                    payloadLength = StreamExtensions.ReadN(receiveBuffer, 2, 2);
-                    maskOffset = 4;
-                }
-                else if (payloadLength == 127)
-                {
-                    await stream.ReadUntil(receiveBuffer, headerLength, headerLength + 8, cancellationToken).ConfigureAwait(false);
-                    payloadLength = StreamExtensions.ReadN(receiveBuffer, 2, 8);
-                    maskOffset = 10;
-                }
+                await stream.ReadUntil(receiveBuffer, headerLength, headerLength + 2, cancellationToken).ConfigureAwait(false);
+                payloadLength = StreamExtensions.ReadN(receiveBuffer, 2, 2);
+                maskOffset = 4;
+            }
+            else if (payloadLength == 127)
+            {
+                await stream.ReadUntil(receiveBuffer, headerLength, headerLength + 8, cancellationToken).ConfigureAwait(false);
+                payloadLength = StreamExtensions.ReadN(receiveBuffer, 2, 8);
+                maskOffset = 10;
             }
 
             var header = new WsFrameHeader(receiveBuffer.At(0), receiveBuffer.At(1));
