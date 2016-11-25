@@ -2,7 +2,6 @@
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
-using wslib.Utils;
 
 namespace wslib.Protocol
 {
@@ -61,13 +60,40 @@ namespace wslib.Protocol
             return r;
         }
 
-        private void inplaceUnmask(byte[] buffer, int offset, int count)
+        private unsafe void inplaceUnmask(byte[] buffer, int offset, int count)
         {
-            var p = framePosition;
-            for (var i = offset; i < offset + count; i++)
+            var maskIndex = (int)(framePosition & 3);
+
+            fixed (byte* pMask = &currentFrame.Mask.Array[currentFrame.Mask.Offset])
+            fixed (byte* pBuffer = buffer)
             {
-                buffer[i] = (byte)(buffer[i] ^ currentFrame.Mask.At((int)(p % 4)));
-                p++;
+                byte* p = pBuffer + offset;
+                byte* end = p + count;
+
+                while (p < end)
+                {
+                    if (maskIndex == 0)
+                    {
+                        uint maski = *(uint*)pMask;
+                        ulong maskl = (ulong)maski << 32 | maski;
+                        while (p + 8 < end)
+                        {
+                            *(ulong*)p ^= maskl;
+                            p += 8;
+                        }
+
+                        while (p + 4 < end)
+                        {
+                            *(uint*)p ^= maski;
+                            p += 4;
+                        }
+
+                        if (p >= end) break;
+                    }
+
+                    *p++ ^= pMask[maskIndex];
+                    maskIndex = (maskIndex + 1) & 3;
+                }
             }
         }
     }
