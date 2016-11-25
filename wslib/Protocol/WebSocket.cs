@@ -24,8 +24,6 @@ namespace wslib.Protocol
         private readonly ArraySegment<byte> headerBuffer;
         private readonly ArraySegment<byte> payloadBuffer;
         private DateTime lastActivity = DateTime.Now;
-        private int isClosing;
-        private bool isClosed;
         private int state = (int)State.OPENED;
 
         private enum State
@@ -37,7 +35,7 @@ namespace wslib.Protocol
             CLOSED
         }
 
-        public bool IsConnected() => stream.CanRead && stream.CanWrite && !isClosed;
+        public bool IsConnected() => stream.CanRead && stream.CanWrite;
 
         public DateTime LastActivity()
         {
@@ -91,8 +89,8 @@ namespace wslib.Protocol
             }
             catch (IOException e) // happens when read or write returns error
             {
-                Console.WriteLine(e);
-                isClosed = true;
+                // TODO: log?
+                await cleanClose().ConfigureAwait(false);
             }
             catch (ProtocolViolationException e)
             {
@@ -106,7 +104,7 @@ namespace wslib.Protocol
             catch (InvalidOperationException e) // happens when read or write happens on a closed socket
             {
                 // TODO: log?
-                isClosed = true;
+                await cleanClose().ConfigureAwait(false);
             }
 
             return null;
@@ -173,7 +171,7 @@ namespace wslib.Protocol
                     return;
 
                 case WsFrameHeader.Opcodes.PING:
-                    sendPong(payload, cancellationToken); // fire&forget
+                    await sendPong(payload, cancellationToken).ConfigureAwait(false);
                     break;
 
                 case WsFrameHeader.Opcodes.PONG: // do nothing
