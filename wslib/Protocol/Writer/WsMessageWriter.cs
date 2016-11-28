@@ -9,6 +9,7 @@ namespace wslib.Protocol.Writer
         private readonly MessageType messageType;
         private readonly Action onDispose;
         private readonly IWsMessageWriteStream stream;
+        private bool firstFrame = true;
 
         public WsMessageWriter(MessageType messageType, Action onDispose, IWsMessageWriteStream stream)
         {
@@ -17,9 +18,10 @@ namespace wslib.Protocol.Writer
             this.stream = stream;
         }
 
-        public Task WriteFrame(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        public Task WriteFrameAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
-            var header = generateFrameHeader(false); // TODO: change opcode to continuation
+            var header = generateFrameHeader(false);
+            firstFrame = false;
             return stream.WriteFrame(header, buffer, offset, count, cancellationToken);
         }
 
@@ -37,7 +39,9 @@ namespace wslib.Protocol.Writer
 
         private WsFrameHeader generateFrameHeader(bool finFlag)
         {
-            var opcode = messageType == MessageType.Text ? WsFrameHeader.Opcodes.TEXT : WsFrameHeader.Opcodes.BINARY;
+            var opcode = firstFrame ?
+                (messageType == MessageType.Text ? WsFrameHeader.Opcodes.TEXT : WsFrameHeader.Opcodes.BINARY)
+                : WsFrameHeader.Opcodes.CONTINUATION;
             return new WsFrameHeader { FIN = finFlag, OPCODE = opcode };
         }
 
