@@ -4,6 +4,7 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using wslib;
+using wslib.Protocol;
 
 namespace LocalServer
 {
@@ -28,22 +29,29 @@ namespace LocalServer
 
         private static async Task appFunc(IWebSocket webSocket)
         {
+            Task wrt = null;
             while (webSocket.IsConnected())
             {
-                using (var msg = await webSocket.ReadMessageAsync(CancellationToken.None))
+                using (var msg = await webSocket.ReadMessageAsync(CancellationToken.None).ConfigureAwait(false))
                 {
                     if (msg == null) continue;
 
                     using (var ms = new MemoryStream())
                     {
-                        await msg.ReadStream.CopyToAsync(ms);
+                        await msg.ReadStream.CopyToAsync(ms).ConfigureAwait(false);
                         byte[] array = ms.ToArray();
-                        using (var w = await webSocket.CreateMessageWriter(msg.Type, CancellationToken.None))
-                        {
-                            await w.WriteMessageAsync(array, 0, array.Length, CancellationToken.None);
-                        }
+                        if (wrt != null) await wrt.ConfigureAwait(false);
+                        wrt = pushMessage(webSocket, msg, array);
                     }
                 }
+            }
+        }
+
+        private static async Task pushMessage(IWebSocket webSocket, WsMessage msg, byte[] array)
+        {
+            using (var w = await webSocket.CreateMessageWriter(msg.Type, CancellationToken.None).ConfigureAwait(false))
+            {
+                await w.WriteMessageAsync(array, 0, array.Length, CancellationToken.None).ConfigureAwait(false);
             }
         }
     }
