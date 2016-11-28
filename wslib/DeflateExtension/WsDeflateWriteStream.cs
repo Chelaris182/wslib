@@ -10,21 +10,34 @@ namespace wslib.DeflateExtension
 {
     class WsDeflateWriteStream : WsWriterWrapper
     {
+        private readonly MemoryStream proxy = new MemoryStream(128);
+
         public WsDeflateWriteStream(IWsMessageWriteStream innerStream) : base(innerStream, false)
         {
         }
 
         public override Task WriteFrame(WsFrameHeader wsFrameHeader, byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
-            var proxy = new MemoryStream();
-            using (DeflateStream deflateStream = new DeflateStream(proxy, CompressionMode.Compress))
+            if (count > 0)
             {
-                deflateStream.Write(buffer, offset, count);
-            } // deflateStream flushes internal data on dispose only
+                using (DeflateStream deflateStream = new DeflateStream(proxy, CompressionMode.Compress, true))
+                {
+                    deflateStream.Write(buffer, offset, count);
+                } // deflateStream flushes internal data on dispose only
 
-            wsFrameHeader.RSV1 = true;
-            var deflatedData = proxy.ToArray();
-            return base.WriteFrame(wsFrameHeader, deflatedData, 0, deflatedData.Length, cancellationToken);
+                buffer = proxy.GetBuffer();
+                count = (int)proxy.Length;
+                wsFrameHeader.RSV1 = true;
+            }
+
+            return base.WriteFrame(wsFrameHeader, buffer, 0, count, cancellationToken);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+                proxy.Dispose();
+            base.Dispose(disposing);
         }
     }
 }
