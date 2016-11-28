@@ -33,10 +33,7 @@ namespace wslib.Protocol
 
         private static async Task sendPing(IWebSocket socket)
         {
-            using (var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(1)))
-            {
-                await socket.SendMessageAsync(WsFrameHeader.Opcodes.PING, pingPayload, tokenSource.Token).ConfigureAwait(false);
-            }
+            await socket.SendMessageAsync(WsFrameHeader.Opcodes.PING, pingPayload, CancellationToken.None).ConfigureAwait(false);
         }
     }
 }
