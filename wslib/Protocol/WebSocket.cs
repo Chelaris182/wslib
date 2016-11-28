@@ -148,15 +148,16 @@ namespace wslib.Protocol
         {
             if (frame.PayloadLength > maxControlPayload)
             {
+                // control frames MUST have a payload length of 125 bytes or less
                 await CloseAsync(CloseStatusCode.ProtocolError, cancellationToken).ConfigureAwait(false);
                 return;
             }
 
             if (!frame.Header.FIN)
             {
-                // current code doesn't support multi-frame control messages
-                await CloseAsync(CloseStatusCode.UnexpectedCondition, cancellationToken).ConfigureAwait(false);
-                throw new ProtocolViolationException("multi-frame control frames aren't supported");
+                // control frames MUST NOT be fragmented                                                
+                await CloseAsync(CloseStatusCode.ProtocolError, cancellationToken).ConfigureAwait(false);
+                return;
             }
 
             var wsMesageReadStream = new WsMesageReader(this, frame);
@@ -167,7 +168,7 @@ namespace wslib.Protocol
             switch (frame.Header.OPCODE)
             {
                 case WsFrameHeader.Opcodes.CLOSE:
-                    await handleCloseMessage(cancellationToken, payload).ConfigureAwait(false);
+                    await handleCloseMessage(payload, cancellationToken).ConfigureAwait(false);
                     return;
 
                 case WsFrameHeader.Opcodes.PING:
@@ -183,7 +184,7 @@ namespace wslib.Protocol
             }
         }
 
-        private async Task handleCloseMessage(CancellationToken cancellationToken, ArraySegment<byte> payload)
+        private async Task handleCloseMessage(ArraySegment<byte> payload, CancellationToken cancellationToken)
         {
             var c = state;
             while (true)
@@ -271,14 +272,15 @@ namespace wslib.Protocol
             await writeSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                // TODO: write data to a "send buffer" first
-                var header = WsDissector.SerializeFrameHeader(new WsFrameHeader { FIN = true, OPCODE = opcode }, payload.Count, null);
+                // TODO: write data to a "send buffer" first?
+                // TODO: cancellationToken may cause invalid data in the channel
+                ArraySegment<byte> header = WsDissector.SerializeFrameHeader(new WsFrameHeader { FIN = true, OPCODE = opcode }, payload.Count, null);
                 await stream.WriteAsync(header, cancellationToken).ConfigureAwait(false);
                 if (payload.Count > 0) await stream.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
             }
             finally
             {
-                writeSemaphore.Release(); // TODO: replace with disposable object
+                writeSemaphore.Release();
             }
         }
     }
