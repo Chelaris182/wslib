@@ -6,39 +6,26 @@ namespace wslib.Utils
 {
     public static class TaskExtensions
     {
-        public static async Task AbortOnTimeout(this Task responseTask, Action abortAction, TimeSpan timeout, CancellationToken token)
+        public static async Task<TResult> WithTimeout<TResult>(this Task<TResult> task, TimeSpan timeout)
         {
-            using (var cancelSource = CancellationTokenSource.CreateLinkedTokenSource(token))
+            await WithTimeout((Task)task, timeout).ConfigureAwait(false);
+            return task.GetAwaiter().GetResult();
+        }
+
+        public static async Task WithTimeout(this Task task, TimeSpan timeout)
+        {
+            using (var cancelSource = new CancellationTokenSource())
             {
                 Task timeoutTask = Task.Delay(timeout, cancelSource.Token);
-
-                if (responseTask == await Task.WhenAny(responseTask, timeoutTask).ConfigureAwait(false))
+                if (task == await Task.WhenAny(task, timeoutTask).ConfigureAwait(false))
                 {
-                    cancelSource.Cancel(); // cancel the delay task                                                                           
+                    cancelSource.Cancel();
+                    task.GetAwaiter().GetResult();
                     return;
                 }
             }
 
-            // timeout or cancellation token has fired                                                                                        
-            abortAction();
-            token.ThrowIfCancellationRequested();
             throw new TimeoutException();
-        }
-
-        public static async Task<TResult> AbortOnTimeout<TResult>(this Task<TResult> responseTask, Action abortAction, TimeSpan timeout, CancellationToken token)
-        {
-            await AbortOnTimeout((Task)responseTask, abortAction, timeout, token).ConfigureAwait(false);
-            return await responseTask.ConfigureAwait(false);
-        }
-
-        public static Task<TResult> WithTimeout<TResult>(this Task<TResult> task, TimeSpan timeout)
-        {
-            return AbortOnTimeout(task, () => { }, timeout, CancellationToken.None);
-        }
-
-        public static Task WithTimeout(this Task task, TimeSpan timeout)
-        {
-            return AbortOnTimeout(task, () => { }, timeout, CancellationToken.None);
         }
     }
 }
