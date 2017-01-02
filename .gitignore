@@ -158,3 +158,6 @@ $RECYCLE.BIN/
 FakesAssemblies
 .nuget/NuGet.exe
 Packages.dgml
+
+# Autobahn
+reports/
