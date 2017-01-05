@@ -5,12 +5,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using wslib;
 using wslib.Protocol;
+using wslib.Protocol.Writer;
 
-namespace LocalServer
+namespace EchoServerCore
 {
-    class Program
+    public class Program
     {
-        static void Main(string[] args)
+        public static void Main(string[] args)
         {
             TaskScheduler.UnobservedTaskException += LogUnobservedTaskException;
 
@@ -32,7 +33,7 @@ namespace LocalServer
             Task wrt = null;
             while (webSocket.IsConnected())
             {
-                using (var msg = await webSocket.ReadMessageAsync(CancellationToken.None).ConfigureAwait(false))
+                using (WsMessage msg = await webSocket.ReadMessageAsync(CancellationToken.None).ConfigureAwait(false))
                 {
                     if (msg == null) continue;
 
@@ -49,7 +50,7 @@ namespace LocalServer
 
         private static async Task pushMessage(IWebSocket webSocket, WsMessage msg, byte[] array)
         {
-            using (var w = await webSocket.CreateMessageWriter(msg.Type, CancellationToken.None).ConfigureAwait(false))
+            using (WsMessageWriter w = await webSocket.CreateMessageWriter(msg.Type, CancellationToken.None).ConfigureAwait(false))
             {
                 await w.WriteMessageAsync(array, 0, array.Length, CancellationToken.None).ConfigureAwait(false);
             }
