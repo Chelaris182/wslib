@@ -2,7 +2,6 @@
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using wslib.Utils;
 
 namespace wslib.Protocol.Reader
 {
@@ -18,19 +17,6 @@ namespace wslib.Protocol.Reader
         public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
             return wsMesageReader.ReadAsync(buffer, offset, count, cancellationToken);
-        }
-
-        public sealed override IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
-        {
-            Task<int> t = ReadAsync(buffer, offset, count);
-            var result = new TaskAsyncResult<int>(t, state);
-            if (callback != null) t.ContinueWith(_ => callback(result));
-            return result;
-        }
-
-        public sealed override int EndRead(IAsyncResult asyncResult)
-        {
-            return ((TaskAsyncResult<int>)asyncResult).Result;
         }
 
         public override void Flush()

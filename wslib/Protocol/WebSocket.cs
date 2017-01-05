@@ -217,7 +217,7 @@ namespace wslib.Protocol
             }
             finally
             {
-                stream.Close();
+                stream.Dispose();
             }
         }
 

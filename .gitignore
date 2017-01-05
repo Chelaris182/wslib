@@ -161,3 +161,6 @@ Packages.dgml
 
 # Autobahn
 reports/
+
+# .NET CORE
+project.lock.json

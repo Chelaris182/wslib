@@ -8,17 +8,17 @@ namespace wslib.Utils
     public abstract class StreamWrapper : Stream
     {
         private readonly bool closeInnerStream;
-        protected readonly Stream InnerStream;
+        private readonly Stream innerStream;
 
-        public StreamWrapper(Stream innerStream, bool closeInnerStream)
+        protected StreamWrapper(Stream innerStream, bool closeInnerStream)
         {
             this.closeInnerStream = closeInnerStream;
-            this.InnerStream = innerStream;
+            this.innerStream = innerStream;
         }
 
-        public override void Close()
+        protected override void Dispose(bool disposing)
         {
-            if (closeInnerStream) InnerStream.Close();
+            if (closeInnerStream) innerStream.Dispose();
         }
 
         public sealed override long Position
@@ -29,7 +29,7 @@ namespace wslib.Utils
 
         public long GetPosition()
         {
-            return InnerStream.Position;
+            return innerStream.Position;
         }
 
         public sealed override void Flush()
@@ -59,48 +59,22 @@ namespace wslib.Utils
 
         public override Task FlushAsync(CancellationToken cancellationToken)
         {
-            return InnerStream.FlushAsync(cancellationToken);
+            return innerStream.FlushAsync(cancellationToken);
         }
 
-        public override bool CanRead => InnerStream.CanRead;
-        public override bool CanSeek => InnerStream.CanSeek;
-        public override bool CanWrite => InnerStream.CanWrite;
-        public override long Length => InnerStream.Length;
-
-        public sealed override IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
-        {
-            Task<int> t = ReadAsync(buffer, offset, count);
-            var result = new TaskAsyncResult<int>(t, state);
-            if (callback != null) t.ContinueWith(_ => callback(result));
-            return result;
-        }
-
-        public sealed override int EndRead(IAsyncResult asyncResult)
-        {
-            return ((TaskAsyncResult<int>)asyncResult).Result;
-        }
-
-        public sealed override IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
-        {
-            Task t = WriteAsync(buffer, offset, count);
-            var result = new TaskAsyncResult(t, state);
-            if (callback != null) t.ContinueWith(_ => callback(result));
-            return result;
-        }
-
-        public sealed override void EndWrite(IAsyncResult asyncResult)
-        {
-            ((TaskAsyncResult)asyncResult).Task.Wait();
-        }
+        public override bool CanRead => innerStream.CanRead;
+        public override bool CanSeek => innerStream.CanSeek;
+        public override bool CanWrite => innerStream.CanWrite;
+        public override long Length => innerStream.Length;
 
         public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
-            return InnerStream.ReadAsync(buffer, offset, count, cancellationToken);
+            return innerStream.ReadAsync(buffer, offset, count, cancellationToken);
         }
 
         public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
-            return InnerStream.WriteAsync(buffer, offset, count, cancellationToken);
+            return innerStream.WriteAsync(buffer, offset, count, cancellationToken);
         }
     }
 }

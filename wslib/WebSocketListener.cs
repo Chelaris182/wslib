@@ -53,7 +53,7 @@ namespace wslib
                 Interlocked.Increment(ref currentOutstandingRequests);
                 socket.NoDelay = true;
 
-                Stream stream = new NetworkStream(socket, FileAccess.ReadWrite, true);
+                Stream stream = new NetworkStream(socket, true);
                 try
                 {
                     offloadStartNextRequest();

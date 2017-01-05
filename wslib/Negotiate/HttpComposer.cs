@@ -2,7 +2,6 @@
 using System.Net;
 using System.Text;
 using System.Threading.Tasks;
-using System.Web;
 
 namespace wslib.Negotiate
 {
@@ -48,7 +47,7 @@ namespace wslib.Negotiate
             writer.Write("HTTP/1.1 ");
             writer.Write((int)status);
             writer.Write(" ");
-            writer.Write(HttpWorkerRequest.GetStatusDescription((int)status));
+            writer.Write(" "); // FIXME: HttpWorkerRequest.GetStatusDescription((int)status));
         }
     }
 }

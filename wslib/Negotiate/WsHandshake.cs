@@ -113,9 +113,9 @@ namespace wslib.Negotiate
             string value;
             if (!httpRequest.Headers.ContainsKey("Host"))
                 throw new HandshakeException("no or bad Host header");
-            if (!httpRequest.Headers.TryGetValue("Upgrade", out value) || !value.Equals("websocket", StringComparison.InvariantCultureIgnoreCase))
+            if (!httpRequest.Headers.TryGetValue("Upgrade", out value) || !value.Equals("websocket", StringComparison.OrdinalIgnoreCase))
                 throw new HandshakeException("no or bad Upgrade header");
-            if (!httpRequest.Headers.TryGetValue("Connection", out value) || !value.Equals("Upgrade", StringComparison.InvariantCultureIgnoreCase))
+            if (!httpRequest.Headers.TryGetValue("Connection", out value) || !value.Equals("Upgrade", StringComparison.OrdinalIgnoreCase))
                 throw new HandshakeException("no or bad Connection header");
             if (!httpRequest.Headers.ContainsKey("Sec-WebSocket-Key"))
                 throw new HandshakeException("no Sec-WebSocket-Key header");
