@@ -2,8 +2,9 @@
   "version": "1.0.0-*",
 
   "dependencies": {
-    "wslib": "1.0.0-*",
-    "NETStandard.Library": "1.6.0",
+    "wslib": {
+      "target": "project"
+    },
     "NUnit": "3.5.0",
     "Moq": "4.5.29",
     "dotnet-test-nunit": "3.4.0-beta-3"
