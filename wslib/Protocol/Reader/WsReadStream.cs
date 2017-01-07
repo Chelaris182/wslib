@@ -2,6 +2,9 @@
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+#if NETFX
+using wslib.Utils;
+#endif
 
 namespace wslib.Protocol.Reader
 {
@@ -18,6 +21,21 @@ namespace wslib.Protocol.Reader
         {
             return wsMesageReader.ReadAsync(buffer, offset, count, cancellationToken);
         }
+
+#if NETFX
+        public sealed override IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
+        {
+            Task<int> t = ReadAsync(buffer, offset, count);
+            var result = new TaskAsyncResult<int>(t, state);
+            if (callback != null) t.ContinueWith(_ => callback(result));
+            return result;
+        }
+
+        public sealed override int EndRead(IAsyncResult asyncResult)
+        {
+            return ((TaskAsyncResult<int>)asyncResult).Result;
+        }
+#endif // NETFX
 
         public override void Flush()
         {
