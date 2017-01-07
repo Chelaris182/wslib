@@ -23,7 +23,7 @@ namespace wslib.DeflateExtension
         {
             if (count > 0)
             {
-                using (DeflateStream deflateStream = new DeflateStream(proxy, CompressionMode.Compress, true))
+                using (DeflateStream deflateStream = new DeflateStream(proxy, CompressionLevel.Optimal, true))
                 {
                     deflateStream.Write(buffer, offset, count);
                 } // deflateStream flushes internal data on dispose only
