@@ -3,7 +3,7 @@ using wslib.Protocol;
 
 namespace wslib.DeflateExtension
 {
-    class DeflateExtension : IServerExtension
+    public class DeflateExtension : IServerExtension
     {
         public bool TryMatch(string token, ExtensionParams extensionParams, out ExtensionParams matchedParams, out IMessageExtension messageExtension)
         {

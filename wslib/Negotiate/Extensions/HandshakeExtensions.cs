@@ -15,13 +15,14 @@ namespace wslib.Negotiate.Extensions
                 var parameters = new ExtensionParams();
                 if (string.IsNullOrEmpty(extension)) throw new HandshakeException("empty extension-token");
                 var extensionParams = extension.Split(';');
+                string extensionName = extensionParams[0].Trim();
                 foreach (var param in extensionParams.Skip(1).Select(s => s.Trim()).Where(s => !string.IsNullOrWhiteSpace(s)))
                 {
                     var tokens = param.Split(new[] { '=' }, 2);
                     parameters.Add(tokens[0], tokens.Length == 2 ? tokens[1] : string.Empty);
                 }
 
-                extensionList.Add(new ExtensionRequest(extensionParams[0], parameters));
+                extensionList.Add(new ExtensionRequest(extensionName, parameters));
             }
 
             return extensionList;

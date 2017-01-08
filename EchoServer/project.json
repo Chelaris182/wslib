@@ -9,7 +9,9 @@
       "type": "platform",
       "version": "1.0.1"
     },
-    "wslib": "1.0.0-*"
+    "wslib": {
+      "target": "project"
+    }
   },
 
   "frameworks": {
