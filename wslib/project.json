@@ -1,5 +1,12 @@
 ﻿{
   "version": "1.0.0-*",
+  "description": ".NET Websocket server classes\r\nSupports:\r\n - RFC6455\r\n - Per message compression extension\r\n - SSL",
+  "packOptions": {
+    "summary": ".NET WebSocket server classes",
+    "licenseUrl": "https://github.com/Chelaris182/wslib/blob/master/LICENSE",
+    "projectUrl": "https://github.com/Chelaris182/wslib",
+    "owners": [ "Chelaris" ]
+  },
   "buildOptions": {
     "allowUnsafe": true
   },
