@@ -10,7 +10,7 @@ Supports:
 ## Quickstart
 ### Install
 ```
-PM> Install-Package wslib -Pre
+PM> Install-Package wslib
 ```
 ### Usage
 ```cs
